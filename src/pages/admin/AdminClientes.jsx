@@ -4,6 +4,8 @@ import appointmentStore from '../../stores/appointmentStore';
 import { gerarLinkWhatsAppCliente } from '../../data/whatsappTemplates';
 import { STATUS } from '../../data/models';
 import { useStoreSync } from '../../hooks/useStore';
+import { isSupabaseConfigured } from '../../lib/supabase';
+import { useSupabaseClients } from '../../hooks/useSupabase';
 import { Avatar } from '../../components/PhotoUpload';
 import {
     Search, Star, Ban, MessageCircle, Edit3, X, Eye, Tag, Plus, Trash2, User
@@ -23,9 +25,13 @@ export default function AdminClientes() {
     const [editTag, setEditTag] = useState('');
     const [blMotivo, setBlMotivo] = useState('');
 
-    // Leitura reativa
+    // Supabase data
+    const sbConfigured = isSupabaseConfigured();
+    const { clients: sbClients, loading: sbLoading } = useSupabaseClients();
+
+    // Leitura reativa — Supabase ou localStorage
     const clientes = (() => {
-        let all = clientStore.getAll();
+        let all = sbConfigured ? sbClients : clientStore.getAll();
         if (filtro === 'favoritos') all = all.filter(u => u.favorito);
         if (filtro === 'blacklist') all = all.filter(u => u.blacklist);
         if (busca) {

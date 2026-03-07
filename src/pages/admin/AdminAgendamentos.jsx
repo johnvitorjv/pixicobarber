@@ -6,6 +6,8 @@ import notificationStore from '../../stores/notificationStore';
 import { STATUS, STATUS_CONFIG, MOTIVOS_REJEICAO, NOTIF_TIPOS, NOTIF_NIVEIS, FORMAS_PAGAMENTO } from '../../data/models';
 import { TEMPLATES, gerarLinkWhatsAppCliente } from '../../data/whatsappTemplates';
 import { useStoreSync } from '../../hooks/useStore';
+import { isSupabaseConfigured } from '../../lib/supabase';
+import { useSupabaseAppointments, updateAppointmentSupabase } from '../../hooks/useSupabase';
 import { Avatar } from '../../components/PhotoUpload';
 import {
     Search, Filter, Clock, CheckCircle, XCircle, MessageCircle, Eye,
@@ -35,14 +37,26 @@ export default function AdminAgendamentos() {
     const [valorCobrado, setValorCobrado] = useState('');
     const [formaPagamento, setFormaPagamento] = useState('');
 
-    // Leitura reativa
+    // Supabase data
+    const supabase = isSupabaseConfigured();
+    const { appointments: sbAppointments, loading: sbLoading } = useSupabaseAppointments();
+
+    // Leitura reativa — Supabase ou localStorage
     const agendamentos = (() => {
-        let all = appointmentStore.getAll();
+        let all = supabase ? sbAppointments : appointmentStore.getAll();
         if (filtroStatus !== 'todos') all = all.filter(a => a.status === filtroStatus);
         if (filtroData) all = all.filter(a => a.data === filtroData);
         if (busca) {
             const q = busca.toLowerCase();
             all = all.filter(a => {
+                if (supabase) {
+                    return (
+                        a.servicoNome?.toLowerCase().includes(q) ||
+                        a._clienteNome?.toLowerCase().includes(q) ||
+                        a._clienteSobrenome?.toLowerCase().includes(q) ||
+                        a._clienteWhatsapp?.includes(q)
+                    );
+                }
                 const cliente = clientStore.getById(a.clienteId);
                 return (
                     a.servicoNome?.toLowerCase().includes(q) ||
@@ -56,8 +70,21 @@ export default function AdminAgendamentos() {
         return all;
     })();
 
+    // Helper: obter dados do cliente (Supabase inline ou localStorage)
+    function getCliente(ag) {
+        if (supabase) {
+            return {
+                nome: ag._clienteNome || 'Cliente',
+                sobrenome: ag._clienteSobrenome || '',
+                whatsapp: ag._clienteWhatsapp || '',
+                fotoUrl: ag._clienteFoto || '',
+            };
+        }
+        return clientStore.getById(ag.clienteId) || { nome: 'Cliente', sobrenome: '', whatsapp: '' };
+    }
+
     function abrirAprovar(ag) {
-        const cliente = clientStore.getById(ag.clienteId);
+        const cliente = getCliente(ag);
         const msg = TEMPLATES.aprovacao({ nome: cliente?.nome || 'Cliente', data: ag.data, faixaInicio: ag.faixaInicio, faixaFim: ag.faixaFim });
         setMensagemWpp(msg);
         setModal({ tipo: 'aprovar', ag });
@@ -66,7 +93,7 @@ export default function AdminAgendamentos() {
     function confirmarAprovar() {
         const { ag } = modal;
         appointmentStore.aprovar(ag.id, '');
-        const cliente = clientStore.getById(ag.clienteId);
+        const cliente = getCliente(ag);
         notificationStore.create({
             tipo: NOTIF_TIPOS.APROVACAO,
             titulo: 'Agendamento aprovado!',
@@ -78,7 +105,7 @@ export default function AdminAgendamentos() {
     }
 
     function abrirRejeitar(ag) {
-        const cliente = clientStore.getById(ag.clienteId);
+        const cliente = getCliente(ag);
         setMotivosSelecionados([]);
         setMotivoTexto('');
         setSugerirNovo(false);
@@ -220,7 +247,7 @@ export default function AdminAgendamentos() {
                         </thead>
                         <tbody>
                             {agendamentos.map(ag => {
-                                const cliente = clientStore.getById(ag.clienteId);
+                                const cliente = getCliente(ag);
                                 const sc = STATUS_CONFIG[ag.status] || {};
                                 return (
                                     <tr key={ag.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
@@ -302,7 +329,7 @@ export default function AdminAgendamentos() {
                     <div className="flex gap-3">
                         <button onClick={confirmarAprovar} className="flex-1 bg-green-500 text-black py-3 font-display font-bold uppercase text-xs tracking-[0.3em] hover:bg-green-400 transition-colors">Confirmar Aprovação</button>
                         <a
-                            href={gerarLinkWhatsAppCliente(clientStore.getById(modal.ag.clienteId)?.whatsapp || '', mensagemWpp)}
+                            href={gerarLinkWhatsAppCliente(getCliente(modal.ag)?.whatsapp || '', mensagemWpp)}
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={() => appointmentStore.marcarWhatsappEnviado(modal.ag.id)}
@@ -371,7 +398,7 @@ export default function AdminAgendamentos() {
                             {sugerirNovo ? 'Enviar Proposta' : 'Confirmar Rejeição'}
                         </button>
                         <a
-                            href={gerarLinkWhatsAppCliente(clientStore.getById(modal.ag.clienteId)?.whatsapp || '', mensagemWpp)}
+                            href={gerarLinkWhatsAppCliente(getCliente(modal.ag)?.whatsapp || '', mensagemWpp)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="bg-[#25D366] text-white px-6 py-3 font-display font-bold uppercase text-xs tracking-[0.3em] flex items-center gap-2"

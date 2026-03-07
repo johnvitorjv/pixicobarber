@@ -26,7 +26,13 @@ import AdminConfiguracoes from './pages/admin/AdminConfiguracoes.jsx'
 
 // Seed de serviços padrão na inicialização
 import serviceStore from './stores/serviceStore'
+import { isSupabaseConfigured } from './lib/supabase'
+import { seedServicesSupabase } from './hooks/useSupabase'
+
 serviceStore.seedDefaults()
+if (isSupabaseConfigured()) {
+  seedServicesSupabase().catch(err => console.error('Seed serviços Supabase:', err))
+}
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

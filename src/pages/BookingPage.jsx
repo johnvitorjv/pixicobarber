@@ -7,6 +7,8 @@ function formatPreco(v) { return `R$ ${Number(v || 0).toFixed(0)}`; }
 import availabilityStore from '../stores/availabilityStore';
 import appointmentStore from '../stores/appointmentStore';
 import notificationStore from '../stores/notificationStore';
+import { isSupabaseConfigured } from '../lib/supabase';
+import { createAppointmentSupabase, useSupabaseServices } from '../hooks/useSupabase';
 import { NOTIF_TIPOS, NOTIF_NIVEIS } from '../data/models';
 import { useStoreSync } from '../hooks/useStore';
 import { ArrowLeft, Lock, Check, ChevronLeft, ChevronRight, MessageCircle, ArrowUpRight } from 'lucide-react';
@@ -83,32 +85,48 @@ export default function BookingPage() {
         return dias;
     }
 
-    function handleConfirmar() {
+    async function handleConfirmar() {
         const servico = serviceStore.getById(servicoId);
         const faixaInfo = disponibilidade[dataSelecionada]?.faixas?.find(f => f.id === faixaSelecionada);
 
-        const ag = appointmentStore.create({
-            clienteId: user.id,
-            servicoId,
-            servicoNome: servico.nome,
-            profissional: 'Pixico',
-            data: dataSelecionada,
-            faixaInicio: faixaInfo.inicio,
-            faixaFim: faixaInfo.fim,
-            observacaoCliente: observacao,
-        });
+        if (isSupabaseConfigured()) {
+            try {
+                await createAppointmentSupabase({
+                    clienteId: user.id,
+                    servicoId,
+                    data: dataSelecionada,
+                    faixaInicio: faixaInfo.inicio,
+                    faixaFim: faixaInfo.fim,
+                    observacaoCliente: observacao,
+                });
+            } catch (err) {
+                console.error('Erro ao criar agendamento no Supabase:', err);
+                alert('Erro ao agendar. Tente novamente.');
+                return;
+            }
+        } else {
+            appointmentStore.create({
+                clienteId: user.id,
+                servicoId,
+                servicoNome: servico.nome,
+                profissional: 'Pixico',
+                data: dataSelecionada,
+                faixaInicio: faixaInfo.inicio,
+                faixaFim: faixaInfo.fim,
+                observacaoCliente: observacao,
+            });
+
+            notificationStore.create({
+                tipo: NOTIF_TIPOS.NOVO_PEDIDO,
+                titulo: 'Novo agendamento!',
+                mensagem: `${user.nome} agendou ${servico.nome} para ${dataSelecionada} às ${faixaInfo.inicio}.`,
+                destinatario: 'admin',
+                nivel: NOTIF_NIVEIS.WARNING,
+            });
+        }
 
         // Bloquear faixa usada
         availabilityStore.blockSlot(dataSelecionada, faixaSelecionada);
-
-        // Notificação para o admin
-        notificationStore.create({
-            tipo: NOTIF_TIPOS.NOVO_PEDIDO,
-            titulo: 'Novo agendamento!',
-            mensagem: `${user.nome} agendou ${servico.nome} para ${dataSelecionada} às ${faixaInfo.inicio}.`,
-            destinatario: 'admin',
-            nivel: NOTIF_NIVEIS.WARNING,
-        });
 
         setStep(5);
     }
