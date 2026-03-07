@@ -16,7 +16,7 @@ export default function LoginPage() {
         setErro('');
     }
 
-    function handleSubmit(e) {
+    async function handleSubmit(e) {
         e.preventDefault();
         setLoading(true);
 
@@ -26,11 +26,16 @@ export default function LoginPage() {
             return;
         }
 
-        const result = login(form.email, form.senha);
-        if (result.success) {
-            navigate(result.user.role === 'admin' ? '/admin' : '/painel');
-        } else {
-            setErro(result.error);
+        try {
+            const result = await login(form.email, form.senha);
+            if (result.success) {
+                const role = result.user?.role || result.user?.user_metadata?.role;
+                navigate(role === 'admin' || result.user?.email === 'admin@pixico.com' ? '/admin' : '/painel');
+            } else {
+                setErro(result.error);
+            }
+        } catch (err) {
+            setErro('Erro inesperado. Tente novamente.');
         }
         setLoading(false);
     }

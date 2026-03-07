@@ -28,7 +28,7 @@ export default function RegisterPage() {
         setErro('');
     }
 
-    function handleSubmit(e) {
+    async function handleSubmit(e) {
         e.preventDefault();
         setLoading(true);
         setFotoErro('');
@@ -59,11 +59,15 @@ export default function RegisterPage() {
             return;
         }
 
-        const result = registrar({ ...form, fotoUrl });
-        if (result.success) {
-            navigate('/painel');
-        } else {
-            setErro(result.error);
+        try {
+            const result = await registrar({ ...form, fotoUrl });
+            if (result.success) {
+                navigate('/painel');
+            } else {
+                setErro(result.error);
+            }
+        } catch (err) {
+            setErro('Erro inesperado. Tente novamente.');
         }
         setLoading(false);
     }
