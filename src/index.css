@@ -1,0 +1,115 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ═══════════════════════════════════════════════════
+   PIXICO BARBER — Design System
+   Avant-Garde Brutalist Barbershop
+   ═══════════════════════════════════════════════════ */
+
+/* ─── Base ─── */
+body {
+  background-color: #050505;
+  color: white;
+  overflow-x: hidden;
+  font-family: 'Inter', sans-serif;
+}
+
+::selection {
+  background: #f2b90d;
+  color: #050505;
+}
+
+/* ─── Noise Overlay (Textura Visual Premium) ─── */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.04;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+}
+
+/* ─── Hero Title ─── */
+.hero-title {
+  font-size: clamp(4rem, 18vw, 15rem);
+  line-height: 0.75;
+}
+
+/* ─── Glitch Border ─── */
+.glitch-border {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  position: relative;
+}
+
+.glitch-border::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  border: 1px solid #f2b90d;
+  clip-path: inset(0 0 95% 0);
+}
+
+/* ─── Scrollbar Custom ─── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #050505;
+}
+::-webkit-scrollbar-thumb {
+  background: #f2b90d33;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #f2b90d66;
+}
+
+/* ─── Utility Classes ─── */
+@layer utilities {
+  .text-outline {
+    -webkit-text-stroke: 1px rgba(255, 255, 255, 0.4);
+    color: transparent;
+  }
+  .clip-diagonal {
+    clip-path: polygon(0 0, 100% 0, 85% 100%, 0% 100%);
+  }
+  .clip-abstract {
+    clip-path: polygon(10% 0%, 100% 0%, 90% 100%, 0% 90%);
+  }
+  .clip-shard {
+    clip-path: polygon(0 15%, 100% 0, 100% 85%, 0 100%);
+  }
+  .vertical-text {
+    writing-mode: vertical-rl;
+  }
+  .perspective-text {
+    transform: skewY(-5deg);
+  }
+  .blend-difference {
+    mix-blend-mode: difference;
+  }
+}
+
+/* ─── Smooth Scroll ─── */
+html {
+  scroll-behavior: smooth;
+}
+
+/* ─── Animations ─── */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.85); }
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
