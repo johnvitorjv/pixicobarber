@@ -4,6 +4,8 @@ import availabilityStore from '../../stores/availabilityStore';
 import clientStore from '../../stores/clientStore';
 import serviceStore from '../../stores/serviceStore';
 import { STATUS, STATUS_CONFIG } from '../../data/models';
+import { isSupabaseConfigured } from '../../lib/supabase';
+import { useSupabaseAppointments } from '../../hooks/useSupabase';
 import { useStoreSync } from '../../hooks/useStore';
 import {
     CalendarDays, ChevronLeft, ChevronRight, Clock, User,
@@ -20,12 +22,15 @@ function formatDataCurta(d) { const [y, m, dd] = d.split('-'); return `${dd}/${m
 
 export default function AdminCalendario() {
     const storeTick = useStoreSync();
-    const [visao, setVisao] = useState('semana'); // 'dia' | 'semana'
+    const [visao, setVisao] = useState('semana');
     const [dataRef, setDataRef] = useState(new Date());
+
+    const sb = isSupabaseConfigured();
+    const { appointments: sbApps } = useSupabaseAppointments();
 
     const config = availabilityStore.getConfig();
     const disponibilidade = availabilityStore.getRange(60);
-    const todosAgendamentos = appointmentStore.getAll();
+    const todosAgendamentos = sb ? sbApps : appointmentStore.getAll();
 
     // ─── Navegação ───
     function navAnterior() {
@@ -234,7 +239,7 @@ export default function AdminCalendario() {
                                 }
 
                                 if (ag) {
-                                    const cliente = clientStore.getById(ag.clienteId);
+                                    const nomeCliente = sb ? (ag._clienteNome || 'Cliente') : (clientStore.getById(ag.clienteId)?.nome || 'Cliente');
                                     const sc = STATUS_CONFIG[ag.status];
                                     const isPendente = ag.status === STATUS.PENDENTE;
 
@@ -243,7 +248,7 @@ export default function AdminCalendario() {
                                             } ${isHoje ? 'bg-opacity-20' : ''}`}>
                                             <div className="p-1 h-full">
                                                 <span className="text-[9px] font-bold text-white block truncate">
-                                                    {cliente?.nome || 'Cliente'}
+                                                    {nomeCliente}
                                                 </span>
                                                 <span className="text-[8px] text-zinc-400 block truncate">{ag.servicoNome}</span>
                                                 <span className={`text-[7px] font-bold uppercase ${sc?.cor || 'text-zinc-500'}`}>
@@ -303,7 +308,8 @@ function DailyDetail({ dateKey, agendamentos, disponibilidade }) {
                     {agendamentos
                         .sort((a, b) => a.faixaInicio.localeCompare(b.faixaInicio))
                         .map(ag => {
-                            const cliente = clientStore.getById(ag.clienteId);
+                            const nomeCliente = sb ? (ag._clienteNome || 'Cliente') : (clientStore.getById(ag.clienteId)?.nome || 'Cliente');
+                            const sobrenomeCliente = sb ? (ag._clienteSobrenome || '') : (clientStore.getById(ag.clienteId)?.sobrenome || '');
                             const sc = STATUS_CONFIG[ag.status];
                             return (
                                 <div key={ag.id} className="flex items-center gap-3 p-3 bg-black/30 border border-white/5">
@@ -313,7 +319,7 @@ function DailyDetail({ dateKey, agendamentos, disponibilidade }) {
                                     <div className="flex-1 min-w-0">
                                         <span className="text-sm font-modern block truncate">
                                             <User size={12} className="inline mr-1 text-zinc-500" />
-                                            {cliente?.nome || 'Cliente'} {cliente?.sobrenome || ''}
+                                            {nomeCliente} {sobrenomeCliente}
                                         </span>
                                         <span className="text-[10px] text-zinc-500 flex items-center gap-1">
                                             <Scissors size={10} /> {ag.servicoNome}

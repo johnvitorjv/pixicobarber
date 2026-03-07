@@ -5,7 +5,7 @@ import { gerarLinkWhatsAppCliente } from '../../data/whatsappTemplates';
 import { STATUS } from '../../data/models';
 import { useStoreSync } from '../../hooks/useStore';
 import { isSupabaseConfigured } from '../../lib/supabase';
-import { useSupabaseClients } from '../../hooks/useSupabase';
+import { useSupabaseClients, useSupabaseAppointments } from '../../hooks/useSupabase';
 import { Avatar } from '../../components/PhotoUpload';
 import {
     Search, Star, Ban, MessageCircle, Edit3, X, Eye, Tag, Plus, Trash2, User
@@ -27,7 +27,8 @@ export default function AdminClientes() {
 
     // Supabase data
     const sbConfigured = isSupabaseConfigured();
-    const { clients: sbClients, loading: sbLoading } = useSupabaseClients();
+    const { clients: sbClients, loading: sbClientsLoading } = useSupabaseClients();
+    const { appointments: sbApps } = useSupabaseAppointments();
 
     // Leitura reativa — Supabase ou localStorage
     const clientes = (() => {
@@ -122,9 +123,9 @@ export default function AdminClientes() {
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {clientes.map(c => {
-                        const ags = appointmentStore.getByClient(c.id);
-                        const concluidos = ags.filter(a => a.status === STATUS.CONCLUIDO).length;
-                        const faltas = ags.filter(a => a.status === STATUS.NAO_COMPARECEU).length;
+                        const clientApps = sbConfigured ? sbApps.filter(a => a.clienteId === c.id) : appointmentStore.getByClient(c.id);
+                        const concluidos = clientApps.filter(a => a.status === STATUS.CONCLUIDO || a.status === 'concluido').length;
+                        const faltas = clientApps.filter(a => a.status === STATUS.NAO_COMPARECEU || a.status === 'nao_compareceu').length;
                         return (
                             <div key={c.id} className={`bg-zinc-900/60 border p-4 transition-all hover:bg-zinc-900/80 ${c.blacklist ? 'border-red-500/20' : c.favorito ? 'border-primary/20' : 'border-white/5'}`}>
                                 <div className="flex items-start justify-between mb-3">

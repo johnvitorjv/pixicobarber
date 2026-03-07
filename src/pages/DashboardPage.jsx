@@ -6,6 +6,8 @@ import notificationStore from '../stores/notificationStore';
 import clientStore from '../stores/clientStore';
 import { STATUS_CONFIG } from '../data/models';
 import { useStoreSync } from '../hooks/useStore';
+import { isSupabaseConfigured } from '../lib/supabase';
+import { useSupabaseAppointments, updateAppointmentSupabase } from '../hooks/useSupabase';
 import { Avatar } from '../components/PhotoUpload';
 import PhotoUpload from '../components/PhotoUpload';
 import { Calendar, Plus, User, LogOut, Clock, ArrowUpRight, Bell } from 'lucide-react';
@@ -14,8 +16,13 @@ export default function DashboardPage() {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
     const storeTick = useStoreSync();
+    const sb = isSupabaseConfigured();
+    const { appointments: sbApps } = useSupabaseAppointments();
 
-    const agendamentos = appointmentStore.getByClient(user?.id);
+    // Agendamentos do cliente: Supabase (filtra por clienteId) ou localStorage
+    const agendamentos = sb
+        ? sbApps.filter(a => a.clienteId === user?.id)
+        : appointmentStore.getByClient(user?.id);
     const proximos = agendamentos.filter(a => ['pendente', 'aprovado', 'aguardando_cliente', 'remarcado'].includes(a.status));
     const historico = agendamentos.filter(a => ['concluido', 'cancelado_cliente', 'rejeitado', 'nao_compareceu'].includes(a.status));
     const notifs = notificationStore.getNaoLidasCliente(user?.id);
@@ -30,9 +37,14 @@ export default function DashboardPage() {
         return `${d}/${m}/${y}`;
     }
 
-    function cancelarAgendamento(agId) {
-        appointmentStore.cancelarPeloCliente(agId, user.id);
-        // Force re-render
+    async function cancelarAgendamento(agId) {
+        if (sb) {
+            try {
+                await updateAppointmentSupabase(agId, { status: 'cancelado_cliente' });
+            } catch (err) { console.error('Erro ao cancelar:', err); }
+        } else {
+            appointmentStore.cancelarPeloCliente(agId, user.id);
+        }
         navigate('/painel');
     }
 
@@ -62,7 +74,7 @@ export default function DashboardPage() {
             <div className="max-w-5xl mx-auto px-6 py-12">
                 {/* Welcome */}
                 <div className="mb-12 flex items-center gap-6">
-                    <Avatar src={clientStore.getById(user?.id)?.fotoUrl} initials={(user?.nome?.[0] || '') + (user?.sobrenome?.[0] || '')} size="lg" />
+                    <Avatar src={user?.photoUrl || user?.fotoUrl || ''} initials={(user?.nome?.[0] || '') + (user?.sobrenome?.[0] || '')} size="lg" />
                     <div>
                         <span className="text-[10px] font-bold uppercase tracking-[1em] text-primary mb-2 block">Painel do Cliente</span>
                         <h1 className="font-display font-bold text-3xl md:text-4xl uppercase tracking-tight">

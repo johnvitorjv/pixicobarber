@@ -1,6 +1,8 @@
 import { useState, useRef } from 'react';
 import serviceStore, { CATEGORIAS, BADGES } from '../../stores/serviceStore';
 import { useStoreSync } from '../../hooks/useStore';
+import { isSupabaseConfigured } from '../../lib/supabase';
+import { useSupabaseServices, createServiceSupabase, updateServiceSupabase, deleteServiceSupabase } from '../../hooks/useSupabase';
 import {
     Scissors, Plus, Search, Filter, Edit3, Trash2, Copy, Eye, EyeOff,
     ChevronUp, ChevronDown, X, Camera, Check, ToggleLeft, ToggleRight,
@@ -29,8 +31,11 @@ export default function AdminServicos() {
     const [editando, setEditando] = useState(null); // null | 'novo' | serviceId
     const [confirmDelete, setConfirmDelete] = useState(null);
 
-    const todos = serviceStore.getAll();
-    const stats = serviceStore.getStats();
+    const sb = isSupabaseConfigured();
+    const { services: sbServices, loading: sbLoading, refetch: refetchServices, getStats: sbGetStats } = useSupabaseServices();
+
+    const todos = sb ? sbServices : serviceStore.getAll();
+    const stats = sb ? sbGetStats() : serviceStore.getStats();
 
     // Filtrar
     const filtrados = todos.filter(s => {
@@ -43,17 +48,31 @@ export default function AdminServicos() {
         return true;
     });
 
-    function handleDelete(id) {
-        serviceStore.delete(id);
+    async function handleDelete(id) {
+        if (sb) {
+            try { await deleteServiceSupabase(id); refetchServices(); } catch (err) { console.error(err); }
+        } else { serviceStore.delete(id); }
         setConfirmDelete(null);
     }
 
     function handleDuplicate(id) {
-        serviceStore.duplicate(id);
+        // Duplicação simples via local (Supabase não tem duplicate)
+        const original = todos.find(s => s.id === id);
+        if (!original) return;
+        const copy = { ...original, nome: `${original.nome} (cópia)` };
+        delete copy.id;
+        if (sb) {
+            createServiceSupabase(copy).then(() => refetchServices()).catch(console.error);
+        } else { serviceStore.duplicate(id); }
     }
 
-    function handleToggleStatus(id) {
-        serviceStore.toggleStatus(id);
+    async function handleToggleStatus(id) {
+        const s = todos.find(s => s.id === id);
+        if (!s) return;
+        const novoStatus = s.status === 'ativo' ? 'inativo' : 'ativo';
+        if (sb) {
+            try { await updateServiceSupabase(id, { status: novoStatus }); refetchServices(); } catch (err) { console.error(err); }
+        } else { serviceStore.toggleStatus(id); }
     }
 
     return (
@@ -189,11 +208,31 @@ export default function AdminServicos() {
 
                             {/* Ordem */}
                             <div className="flex flex-col gap-0.5 flex-shrink-0">
-                                <button onClick={() => serviceStore.moveUp(servico.id)} className="text-zinc-600 hover:text-primary transition-colors p-0.5">
+                                <button onClick={async () => {
+                                    if (sb) {
+                                        const s = todos.find(x => x.id === servico.id);
+                                        const idx = todos.indexOf(s);
+                                        if (idx > 0) {
+                                            await updateServiceSupabase(servico.id, { ordem: todos[idx - 1].ordem });
+                                            await updateServiceSupabase(todos[idx - 1].id, { ordem: servico.ordem });
+                                            refetchServices();
+                                        }
+                                    } else { serviceStore.moveUp(servico.id); }
+                                }} className="text-zinc-600 hover:text-primary transition-colors p-0.5">
                                     <ChevronUp size={14} />
                                 </button>
                                 <span className="text-[9px] text-zinc-600 text-center font-mono">{servico.ordem}</span>
-                                <button onClick={() => serviceStore.moveDown(servico.id)} className="text-zinc-600 hover:text-primary transition-colors p-0.5">
+                                <button onClick={async () => {
+                                    if (sb) {
+                                        const s = todos.find(x => x.id === servico.id);
+                                        const idx = todos.indexOf(s);
+                                        if (idx < todos.length - 1) {
+                                            await updateServiceSupabase(servico.id, { ordem: todos[idx + 1].ordem });
+                                            await updateServiceSupabase(todos[idx + 1].id, { ordem: servico.ordem });
+                                            refetchServices();
+                                        }
+                                    } else { serviceStore.moveDown(servico.id); }
+                                }} className="text-zinc-600 hover:text-primary transition-colors p-0.5">
                                     <ChevronDown size={14} />
                                 </button>
                             </div>
@@ -223,6 +262,9 @@ export default function AdminServicos() {
                 <ServiceModal
                     serviceId={editando === 'novo' ? null : editando}
                     onClose={() => setEditando(null)}
+                    sb={sb}
+                    sbServices={sbServices}
+                    refetchServices={refetchServices}
                 />
             )}
 
@@ -233,7 +275,7 @@ export default function AdminServicos() {
                     <div className="relative bg-zinc-900 border border-white/10 p-6 max-w-sm w-full" onClick={e => e.stopPropagation()}>
                         <h3 className="font-display font-bold text-lg uppercase mb-3">Excluir Serviço?</h3>
                         <p className="text-zinc-400 font-modern text-sm mb-6">
-                            "{serviceStore.getById(confirmDelete)?.nome}" será removido permanentemente. Esta ação não pode ser desfeita.
+                            "{todos.find(s => s.id === confirmDelete)?.nome || ''}" será removido permanentemente. Esta ação não pode ser desfeita.
                         </p>
                         <div className="flex gap-3">
                             <button onClick={() => setConfirmDelete(null)} className="flex-1 border border-white/10 py-3 text-sm font-display uppercase tracking-wider hover:bg-white/5 transition-colors">
@@ -253,8 +295,8 @@ export default function AdminServicos() {
 // ═══════════════════════════════════════════════
 // Modal de Edição/Criação
 // ═══════════════════════════════════════════════
-function ServiceModal({ serviceId, onClose }) {
-    const original = serviceId ? serviceStore.getById(serviceId) : null;
+function ServiceModal({ serviceId, onClose, sb, sbServices, refetchServices }) {
+    const original = serviceId ? (sb ? sbServices.find(s => s.id === serviceId) : serviceStore.getById(serviceId)) : null;
     const inputRef = useRef(null);
 
     const [form, setForm] = useState({
@@ -300,7 +342,7 @@ function ServiceModal({ serviceId, onClose }) {
         reader.readAsDataURL(file);
     }
 
-    function handleSave() {
+    async function handleSave() {
         const data = {
             ...form,
             preco: Number(form.preco) || 0,
@@ -308,10 +350,21 @@ function ServiceModal({ serviceId, onClose }) {
             duracao: Number(form.duracao) || 30,
         };
 
-        if (serviceId) {
-            serviceStore.update(serviceId, data);
+        if (sb) {
+            try {
+                if (serviceId) {
+                    await updateServiceSupabase(serviceId, data);
+                } else {
+                    await createServiceSupabase(data);
+                }
+                refetchServices();
+            } catch (err) { console.error('Erro ao salvar serviço:', err); }
         } else {
-            serviceStore.create(data);
+            if (serviceId) {
+                serviceStore.update(serviceId, data);
+            } else {
+                serviceStore.create(data);
+            }
         }
         onClose();
     }
@@ -436,8 +489,8 @@ function ServiceModal({ serviceId, onClose }) {
                                     type="button"
                                     onClick={() => handleChange(opt.key, !form[opt.key])}
                                     className={`flex items-center gap-2 p-3 border text-xs font-modern transition-all ${form[opt.key]
-                                            ? 'border-primary/30 bg-primary/5 text-primary'
-                                            : 'border-white/5 text-zinc-500 hover:border-white/10'
+                                        ? 'border-primary/30 bg-primary/5 text-primary'
+                                        : 'border-white/5 text-zinc-500 hover:border-white/10'
                                         }`}
                                 >
                                     {form[opt.key] ? <Check size={14} /> : <opt.icon size={14} />}
@@ -454,8 +507,8 @@ function ServiceModal({ serviceId, onClose }) {
                             type="button"
                             onClick={() => handleChange('status', form.status === 'ativo' ? 'inativo' : 'ativo')}
                             className={`flex items-center gap-2 px-4 py-2 text-xs font-modern transition-all border ${form.status === 'ativo'
-                                    ? 'border-green-500/30 bg-green-500/10 text-green-400'
-                                    : 'border-red-500/30 bg-red-500/10 text-red-400'
+                                ? 'border-green-500/30 bg-green-500/10 text-green-400'
+                                : 'border-red-500/30 bg-red-500/10 text-red-400'
                                 }`}
                         >
                             {form.status === 'ativo' ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}

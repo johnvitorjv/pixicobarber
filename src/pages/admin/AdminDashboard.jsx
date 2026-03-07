@@ -1,9 +1,10 @@
 import { Link } from 'react-router-dom';
+import { STATUS_CONFIG, STATUS } from '../../data/models';
+import { isSupabaseConfigured } from '../../lib/supabase';
+import { useSupabaseAppointments, useSupabaseClients, useSupabaseServices } from '../../hooks/useSupabase';
+// Fallbacks localStorage (só usados sem Supabase)
 import appointmentStore from '../../stores/appointmentStore';
 import clientStore from '../../stores/clientStore';
-import financialStore from '../../stores/financialStore';
-import notificationStore from '../../stores/notificationStore';
-import { STATUS_CONFIG, STATUS } from '../../data/models';
 import serviceStore from '../../stores/serviceStore';
 import { useStoreSync } from '../../hooks/useStore';
 import {
@@ -16,26 +17,43 @@ function formatData(d) { if (!d) return ''; const [y, m, dd] = d.split('-'); ret
 
 export default function AdminDashboard() {
     const storeTick = useStoreSync();
+    const sb = isSupabaseConfigured();
 
-    const agStats = appointmentStore.getStats();
-    const clStats = clientStore.getStats();
-    const finDia = financialStore.getStats('dia');
-    const finSemana = financialStore.getStats('semana');
-    const finMes = financialStore.getStats('mes');
-    const hoje = appointmentStore.getHoje();
-    const pendentes = appointmentStore.getPendentes();
-    const aguardando = appointmentStore.getAguardandoCliente();
-    const notifsNaoLidas = notificationStore.getNaoLidasAdmin();
+    // Dados do Supabase
+    const { appointments: sbApps } = useSupabaseAppointments();
+    const { clients: sbClients } = useSupabaseClients();
+
+    // Stats — Supabase ou localStorage
+    const allApps = sb ? sbApps : appointmentStore.getAll();
+    const agStats = {
+        total: allApps.length,
+        pendentes: allApps.filter(a => a.status === 'pendente').length,
+        aprovados: allApps.filter(a => a.status === 'aprovado').length,
+        rejeitados: allApps.filter(a => a.status === 'rejeitado').length,
+        aguardando: allApps.filter(a => a.status === 'aguardando_cliente').length,
+        concluidos: allApps.filter(a => a.status === 'concluido').length,
+        cancelados: allApps.filter(a => a.status === 'cancelado_cliente').length,
+        naoCompareceram: allApps.filter(a => a.status === 'nao_compareceu').length,
+    };
+
+    const clTotal = sb ? sbClients.length : clientStore.getAll().length;
+
+    const hoje = new Date().toISOString().split('T')[0];
+    const hojeApps = allApps
+        .filter(a => a.data === hoje && (a.status === 'aprovado' || a.status === 'pendente'))
+        .sort((a, b) => (a.faixaInicio || '').localeCompare(b.faixaInicio || ''));
+    const pendentes = allApps.filter(a => a.status === 'pendente');
+    const aguardando = allApps.filter(a => a.status === 'aguardando_cliente');
 
     const STAT_CARDS = [
         { label: 'Pendentes', valor: agStats.pendentes, cor: 'text-yellow-400', bg: 'bg-yellow-400/10', icon: Clock },
         { label: 'Aprovados', valor: agStats.aprovados, cor: 'text-green-400', bg: 'bg-green-400/10', icon: CheckCircle },
         { label: 'Concluídos', valor: agStats.concluidos, cor: 'text-emerald-400', bg: 'bg-emerald-400/10', icon: CheckCircle },
         { label: 'Rejeitados', valor: agStats.rejeitados, cor: 'text-red-400', bg: 'bg-red-400/10', icon: XCircle },
-        { label: 'Clientes', valor: clStats.total, cor: 'text-white', bg: 'bg-white/5', icon: Users },
-        { label: 'Favoritos', valor: clStats.favoritos, cor: 'text-primary', bg: 'bg-primary/10', icon: Star },
-        { label: 'Blacklist', valor: clStats.blacklist, cor: 'text-red-400', bg: 'bg-red-400/10', icon: Ban },
-        { label: 'Notificações', valor: notifsNaoLidas.length, cor: 'text-blue-400', bg: 'bg-blue-400/10', icon: Bell },
+        { label: 'Clientes', valor: clTotal, cor: 'text-white', bg: 'bg-white/5', icon: Users },
+        { label: 'Total Ags', valor: agStats.total, cor: 'text-primary', bg: 'bg-primary/10', icon: Star },
+        { label: 'Cancelados', valor: agStats.cancelados, cor: 'text-red-400', bg: 'bg-red-400/10', icon: Ban },
+        { label: 'Faltas', valor: agStats.naoCompareceram, cor: 'text-orange-400', bg: 'bg-orange-400/10', icon: AlertTriangle },
     ];
 
     return (
@@ -59,22 +77,6 @@ export default function AdminDashboard() {
                 ))}
             </div>
 
-            {/* Financial Row */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-8">
-                {[
-                    { label: 'Faturamento Hoje', valor: finDia.totalEntradas, extra: `${finDia.qtdEntradas} serviço(s)` },
-                    { label: 'Faturamento Semana', valor: finSemana.totalEntradas, extra: `Ticket médio: ${formatPreco(finSemana.ticketMedio)}` },
-                    { label: 'Faturamento Mês', valor: finMes.totalEntradas, extra: `Lucro: ${formatPreco(finMes.lucro)}` },
-                ].map(item => (
-                    <div key={item.label} className="bg-zinc-900/60 border border-white/5 p-5">
-                        <DollarSign size={16} className="text-primary mb-2" />
-                        <span className="text-2xl font-display font-bold text-primary">{formatPreco(item.valor)}</span>
-                        <span className="block text-[9px] font-bold uppercase tracking-[0.4em] text-zinc-500 mt-1">{item.label}</span>
-                        <span className="block text-[10px] text-zinc-600 font-modern mt-2">{item.extra}</span>
-                    </div>
-                ))}
-            </div>
-
             {/* Two Column: Próximos Horários + Alertas */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Próximos horários de hoje */}
@@ -87,18 +89,18 @@ export default function AdminDashboard() {
                             Ver todos <ArrowUpRight size={12} />
                         </Link>
                     </div>
-                    {hoje.length === 0 ? (
+                    {hojeApps.length === 0 ? (
                         <p className="text-zinc-600 font-modern text-sm py-4 text-center">Nenhum agendamento para hoje.</p>
                     ) : (
                         <div className="space-y-2">
-                            {hoje.slice(0, 6).map(ag => {
+                            {hojeApps.slice(0, 6).map(ag => {
                                 const sc = STATUS_CONFIG[ag.status];
-                                const cliente = clientStore.getById(ag.clienteId);
+                                const nome = sb ? (ag._clienteNome || 'Cliente') : (clientStore.getById(ag.clienteId)?.nome || 'Cliente');
                                 return (
                                     <div key={ag.id} className="flex items-center gap-3 p-3 bg-black/30 border border-white/5">
                                         <span className="text-sm font-modern font-bold text-primary w-14 shrink-0">{ag.faixaInicio}</span>
                                         <div className="flex-1 min-w-0">
-                                            <span className="text-sm font-modern block truncate">{cliente?.nome || 'Cliente'} {cliente?.sobrenome || ''}</span>
+                                            <span className="text-sm font-modern block truncate">{nome}</span>
                                             <span className="text-[10px] text-zinc-500">{ag.servicoNome}</span>
                                         </div>
                                         <span className={`text-[9px] font-bold uppercase tracking-wider ${sc?.cor || 'text-zinc-500'} px-2 py-1 ${sc?.bg || 'bg-zinc-800'}`}>
@@ -130,12 +132,6 @@ export default function AdminDashboard() {
                                 <span className="text-sm font-modern flex-1"><strong>{aguardando.length}</strong> proposta(s) aguardando retorno do cliente</span>
                                 <ChevronRight size={14} className="text-zinc-600" />
                             </Link>
-                        )}
-                        {clStats.novosEsteMes > 0 && (
-                            <div className="flex items-center gap-3 p-3 bg-white/5 border border-white/5">
-                                <UserPlus size={16} className="text-emerald-400" />
-                                <span className="text-sm font-modern flex-1"><strong>{clStats.novosEsteMes}</strong> novo(s) cliente(s) este mês</span>
-                            </div>
                         )}
                         {pendentes.length === 0 && aguardando.length === 0 && (
                             <p className="text-zinc-600 font-modern text-sm py-4 text-center">Tudo em ordem! Nenhum alerta no momento.</p>

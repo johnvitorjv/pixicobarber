@@ -90,17 +90,15 @@ export default function AdminAgendamentos() {
         setModal({ tipo: 'aprovar', ag });
     }
 
-    function confirmarAprovar() {
+    async function confirmarAprovar() {
         const { ag } = modal;
-        appointmentStore.aprovar(ag.id, '');
-        const cliente = getCliente(ag);
-        notificationStore.create({
-            tipo: NOTIF_TIPOS.APROVACAO,
-            titulo: 'Agendamento aprovado!',
-            mensagem: `Seu ${ag.servicoNome} foi confirmado para ${formatData(ag.data)} às ${ag.faixaInicio}.`,
-            destinatario: ag.clienteId,
-            nivel: NOTIF_NIVEIS.SUCCESS,
-        });
+        if (supabase) {
+            try {
+                await updateAppointmentSupabase(ag.id, { status: 'aprovado' });
+            } catch (err) { console.error('Erro ao aprovar:', err); }
+        } else {
+            appointmentStore.aprovar(ag.id, '');
+        }
         setModal(null);
     }
 
@@ -117,26 +115,26 @@ export default function AdminAgendamentos() {
         setModal({ tipo: 'rejeitar', ag });
     }
 
-    function confirmarRejeitar() {
+    async function confirmarRejeitar() {
         const { ag } = modal;
-        const motivoFinal = motivosSelecionados.map(id => MOTIVOS_REJEICAO.find(m => m.id === id)?.label).filter(Boolean).join('; ') + (motivoTexto ? ` — ${motivoTexto}` : '');
-        appointmentStore.rejeitar(ag.id, {
-            motivosRejeicaoIds: motivosSelecionados,
-            motivoRejeicao: motivoFinal,
-            sugestaoNovaData: sugerirNovo ? novaData : null,
-            sugestaoNovaFaixa: sugerirNovo ? `${novaFaixaInicio} às ${novaFaixaFim}` : null,
-        });
-        const notifTipo = sugerirNovo ? NOTIF_TIPOS.AGUARDANDO : NOTIF_TIPOS.REJEICAO;
-        const notifMsg = sugerirNovo
-            ? `Seu horário para ${formatData(ag.data)} não está disponível. Uma nova proposta foi enviada.`
-            : `Seu horário para ${formatData(ag.data)} foi recusado: ${motivoFinal}`;
-        notificationStore.create({
-            tipo: notifTipo,
-            titulo: sugerirNovo ? 'Proposta de novo horário' : 'Agendamento recusado',
-            mensagem: notifMsg,
-            destinatario: ag.clienteId,
-            nivel: sugerirNovo ? NOTIF_NIVEIS.WARNING : NOTIF_NIVEIS.ERROR,
-        });
+        const novoStatus = sugerirNovo ? 'aguardando_cliente' : 'rejeitado';
+        if (supabase) {
+            try {
+                const updates = { status: novoStatus };
+                if (sugerirNovo && novaData) updates.data = novaData;
+                if (sugerirNovo && novaFaixaInicio) updates.faixaInicio = novaFaixaInicio;
+                if (sugerirNovo && novaFaixaFim) updates.faixaFim = novaFaixaFim;
+                await updateAppointmentSupabase(ag.id, updates);
+            } catch (err) { console.error('Erro ao rejeitar:', err); }
+        } else {
+            const motivoFinal = motivosSelecionados.map(id => MOTIVOS_REJEICAO.find(m => m.id === id)?.label).filter(Boolean).join('; ') + (motivoTexto ? ` — ${motivoTexto}` : '');
+            appointmentStore.rejeitar(ag.id, {
+                motivosRejeicaoIds: motivosSelecionados,
+                motivoRejeicao: motivoFinal,
+                sugestaoNovaData: sugerirNovo ? novaData : null,
+                sugestaoNovaFaixa: sugerirNovo ? `${novaFaixaInicio} às ${novaFaixaFim}` : null,
+            });
+        }
         setModal(null);
     }
 
@@ -146,45 +144,47 @@ export default function AdminAgendamentos() {
         setModal({ tipo: 'concluir', ag });
     }
 
-    function confirmarConcluir() {
+    async function confirmarConcluir() {
         const { ag } = modal;
         const valor = Number(valorCobrado);
-        appointmentStore.concluir(ag.id, valor, formaPagamento);
-        financialStore.registrarEntradaServico({ ...ag, valorCobrado: valor, formaPagamento });
-        clientStore.updateScorePresenca(ag.clienteId, 5);
-        notificationStore.create({
-            tipo: NOTIF_TIPOS.CONCLUIDO,
-            titulo: 'Atendimento concluído',
-            mensagem: `Seu ${ag.servicoNome} foi finalizado. Obrigado!`,
-            destinatario: ag.clienteId,
-            nivel: NOTIF_NIVEIS.SUCCESS,
-        });
+        if (supabase) {
+            try {
+                await updateAppointmentSupabase(ag.id, { status: 'concluido' });
+            } catch (err) { console.error('Erro ao concluir:', err); }
+        } else {
+            appointmentStore.concluir(ag.id, valor, formaPagamento);
+            financialStore.registrarEntradaServico({ ...ag, valorCobrado: valor, formaPagamento });
+            clientStore.updateScorePresenca(ag.clienteId, 5);
+        }
         setModal(null);
     }
 
-    function handleNaoCompareceu(ag) {
-        appointmentStore.marcarNaoCompareceu(ag.id);
-        clientStore.updateScorePresenca(ag.clienteId, -15);
-        notificationStore.create({
-            tipo: NOTIF_TIPOS.SISTEMA,
-            titulo: 'Falta registrada',
-            mensagem: `${ag.servicoNome} em ${formatData(ag.data)} — cliente não compareceu.`,
-            destinatario: 'admin',
-            nivel: NOTIF_NIVEIS.WARNING,
-        });
+    async function handleNaoCompareceu(ag) {
+        if (supabase) {
+            try {
+                await updateAppointmentSupabase(ag.id, { status: 'nao_compareceu' });
+            } catch (err) { console.error('Erro:', err); }
+        } else {
+            appointmentStore.marcarNaoCompareceu(ag.id);
+            clientStore.updateScorePresenca(ag.clienteId, -15);
+        }
     }
 
-    function handleRemarcar(ag) {
+    async function handleRemarcar(ag) {
         if (ag.sugestaoNovaData) {
             const [fi, ff] = (ag.sugestaoNovaFaixa || '').split(' às ');
-            appointmentStore.remarcar(ag.id, ag.sugestaoNovaData, fi || ag.faixaInicio, ff || ag.faixaFim);
-            notificationStore.create({
-                tipo: NOTIF_TIPOS.REMARCACAO,
-                titulo: 'Agendamento remarcado',
-                mensagem: `Seu horário foi atualizado para ${formatData(ag.sugestaoNovaData)}.`,
-                destinatario: ag.clienteId,
-                nivel: NOTIF_NIVEIS.SUCCESS,
-            });
+            if (supabase) {
+                try {
+                    await updateAppointmentSupabase(ag.id, {
+                        status: 'aprovado',
+                        data: ag.sugestaoNovaData,
+                        faixaInicio: fi || ag.faixaInicio,
+                        faixaFim: ff || ag.faixaFim,
+                    });
+                } catch (err) { console.error('Erro:', err); }
+            } else {
+                appointmentStore.remarcar(ag.id, ag.sugestaoNovaData, fi || ag.faixaInicio, ff || ag.faixaFim);
+            }
         }
     }
 
