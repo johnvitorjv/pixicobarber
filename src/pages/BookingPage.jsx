@@ -29,7 +29,14 @@ export default function BookingPage() {
 
     const storeTick = useStoreSync();
     const disponibilidade = availabilityStore.getRange(60);
-    const servicoSelecionado = serviceStore.getById(servicoId);
+
+    // Serviços: Supabase quando configurado, localStorage como fallback
+    const sbConfigured = isSupabaseConfigured();
+    const { services: sbServices, loading: sbServicesLoading, getById: sbGetById, getVisiveis: sbGetVisiveis } = useSupabaseServices();
+
+    const servicosVisiveis = sbConfigured ? sbGetVisiveis('agendamento') : serviceStore.getVisiveis('agendamento');
+    const getServicoById = (id) => sbConfigured ? sbGetById(id) : serviceStore.getById(id);
+    const servicoSelecionado = getServicoById(servicoId);
 
     // Redirecionar para login se não autenticado
     if (!isAuthenticated) {
@@ -86,7 +93,7 @@ export default function BookingPage() {
     }
 
     async function handleConfirmar() {
-        const servico = serviceStore.getById(servicoId);
+        const servico = getServicoById(servicoId);
         const faixaInfo = disponibilidade[dataSelecionada]?.faixas?.find(f => f.id === faixaSelecionada);
 
         if (isSupabaseConfigured()) {
@@ -177,7 +184,7 @@ export default function BookingPage() {
                         <p className="text-zinc-500 font-modern mb-8">Selecione o serviço que deseja agendar.</p>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {serviceStore.getVisiveis('agendamento').map(s => (
+                            {servicosVisiveis.map(s => (
                                 <button
                                     key={s.id}
                                     onClick={() => { setServicoId(s.id); setStep(2); }}
