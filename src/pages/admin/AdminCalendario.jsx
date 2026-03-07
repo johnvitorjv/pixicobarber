@@ -80,13 +80,17 @@ export default function AdminCalendario() {
         return slots;
     }
 
-    // ─── Agendamentos por dia ───
+    // ─── Agendamentos por dia (com normalização de data) ───
     function getAgendamentosDia(dateKey) {
-        return todosAgendamentos.filter(a =>
-            a.data === dateKey &&
-            a.status !== STATUS.CANCELADO_CLIENTE &&
-            a.status !== STATUS.REJEITADO
-        );
+        return todosAgendamentos.filter(a => {
+            // Normalizar: Supabase pode retornar 'YYYY-MM-DD' ou 'YYYY-MM-DDT...' 
+            const agData = (a.data || '').slice(0, 10);
+            return (
+                agData === dateKey &&
+                a.status !== STATUS.CANCELADO_CLIENTE &&
+                a.status !== STATUS.REJEITADO
+            );
+        });
     }
 
     // Verificar se um slot está no horário de almoço
@@ -97,10 +101,22 @@ export default function AdminCalendario() {
         return h >= aI && h < aF;
     }
 
-    // Verificar se um slot tem agendamento
+    // Verificar se um slot tem agendamento (cobre range temporal inteiro)
     function getAgendamentoSlot(dateKey, slot) {
         const ags = getAgendamentosDia(dateKey);
-        return ags.find(a => a.faixaInicio === slot);
+        const slotMin = timeToMinutes(slot);
+        return ags.find(a => {
+            const iniMin = timeToMinutes(a.faixaInicio);
+            const fimMin = timeToMinutes(a.faixaFim);
+            // O slot está DENTRO do range do agendamento
+            return slotMin >= iniMin && slotMin < fimMin;
+        });
+    }
+
+    function timeToMinutes(t) {
+        if (!t) return 0;
+        const [h, m] = t.split(':').map(Number);
+        return (h || 0) * 60 + (m || 0);
     }
 
     const diasVisiveis = getDiasVisiveis();

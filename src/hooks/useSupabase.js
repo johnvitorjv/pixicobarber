@@ -60,7 +60,7 @@ function mapAppointment(a) {
         servicoNome: a.services?.nome || 'Serviço',
         servicoPreco: a.services?.preco || 0,
         profissional: 'Pixico',
-        data: a.data,
+        data: (a.data || '').slice(0, 10),
         faixaInicio: a.faixa_inicio?.slice(0, 5) || '',
         faixaFim: a.faixa_fim?.slice(0, 5) || '',
         status: a.status || 'pendente',
