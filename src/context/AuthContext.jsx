@@ -84,18 +84,22 @@ export function AuthProvider({ children }) {
     // Buscar dados estendidos do usuário (Supabase)
     const fetchAndSetUserData = async (supabaseUser) => {
         try {
-            // Em produção buscaríamos da tabela "profiles"
-            // Por enquanto simulamos o perfil estendido para compatibilidade
+            const meta = supabaseUser.user_metadata || {};
             const safeUser = {
                 id: supabaseUser.id,
                 email: supabaseUser.email,
-                role: supabaseUser.user_metadata?.role || 'client'
-                // outras propriedades viriam da tabela profiles
+                nome: meta.nome || '',
+                sobrenome: meta.sobrenome || '',
+                whatsapp: meta.whatsapp || '',
+                fotoUrl: meta.fotoUrl || '',
+                role: meta.role || 'client',
             };
             setUser(safeUser);
+            return safeUser;
         } catch (error) {
             console.error('Erro ao buscar dados do usuário:', error);
             setUser(null);
+            return null;
         }
     };
 
@@ -111,17 +115,32 @@ export function AuthProvider({ children }) {
                             nome: dados.nome,
                             sobrenome: dados.sobrenome,
                             whatsapp: dados.whatsapp,
+                            fotoUrl: dados.fotoUrl || '',
                             role: 'client'
                         }
                     }
                 });
 
                 if (error) throw error;
-                // Como não temos a tabela 'profiles' ainda, retornamos sucesso genérico
-                // (Em produção, um Trigger no Postgres criaria a linha no `profiles` automaticamente)
+
+                // Se há sessão (email confirmation desativado), setar user direto
+                if (data.session && data.user) {
+                    const safeUser = await fetchAndSetUserData(data.user);
+                    return { success: true, user: safeUser };
+                }
+
+                // Se NÃO há sessão (email confirmation ativo)
+                if (data.user && !data.session) {
+                    return {
+                        success: false,
+                        error: 'Cadastro realizado! Verifique seu e-mail para confirmar a conta antes de fazer login.',
+                        needsConfirmation: true
+                    };
+                }
+
                 return { success: true, user: data.user };
             } catch (error) {
-                return { success: false, error: error.message };
+                return { success: false, error: error.message || 'Erro ao cadastrar.' };
             }
         } else {
             // Fallback LocalStorage
@@ -153,9 +172,23 @@ export function AuthProvider({ children }) {
                     password: senha,
                 });
                 if (error) throw error;
+
+                // Setar user diretamente
+                if (data.user) {
+                    const safeUser = await fetchAndSetUserData(data.user);
+                    return { success: true, user: safeUser };
+                }
                 return { success: true, user: data.user };
             } catch (error) {
-                return { success: false, error: 'E-mail ou senha incorretos (Supabase).' };
+                // Mostrar erro REAL do Supabase para debug
+                const msg = error.message || '';
+                if (msg.includes('Email not confirmed')) {
+                    return { success: false, error: 'E-mail não confirmado. Verifique sua caixa de entrada.' };
+                }
+                if (msg.includes('Invalid login credentials')) {
+                    return { success: false, error: 'E-mail ou senha incorretos.' };
+                }
+                return { success: false, error: msg || 'Erro ao fazer login.' };
             }
         } else {
             // Fallback LocalStorage

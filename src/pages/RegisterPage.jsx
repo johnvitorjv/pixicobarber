@@ -63,6 +63,13 @@ export default function RegisterPage() {
             const result = await registrar({ ...form, fotoUrl });
             if (result.success) {
                 navigate('/painel');
+            } else if (result.needsConfirmation) {
+                // Email confirmation está ativo — informar o usuário
+                setErro(result.error);
+                setLoading(false);
+                // Redirecionar para login após 3 segundos
+                setTimeout(() => navigate('/login'), 3000);
+                return;
             } else {
                 setErro(result.error);
             }
