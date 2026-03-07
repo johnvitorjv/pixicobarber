@@ -154,7 +154,7 @@ export function useSupabaseClients() {
                 observacoesAdmin: p.observacoes || '',
                 ultimaAtividade: p.ultima_atividade || p.criado_em,
                 criadoEm: p.criado_em,
-                favorito: false,
+                favorito: p.favorito || false,
                 blacklist: false,
                 tags: [],
             }));
@@ -171,6 +171,26 @@ export function useSupabaseClients() {
     }, [fetchClients]);
 
     return { clients, loading, refetch: fetchClients };
+}
+
+export async function updateProfileSupabase(id, updates) {
+    if (!isSupabaseConfigured()) return null;
+    const mapped = {};
+    if (updates.favorito !== undefined) mapped.favorito = updates.favorito;
+    if (updates.foto_url !== undefined) mapped.foto_url = updates.foto_url;
+    if (updates.observacoes !== undefined) mapped.observacoes = updates.observacoes;
+    if (updates.whatsapp !== undefined) mapped.whatsapp = updates.whatsapp;
+    if (updates.nome !== undefined) mapped.nome = updates.nome;
+    if (updates.sobrenome !== undefined) mapped.sobrenome = updates.sobrenome;
+
+    const { data, error } = await supabase
+        .from('profiles')
+        .update(mapped)
+        .eq('id', id)
+        .select()
+        .single();
+    if (error) throw error;
+    return data;
 }
 
 

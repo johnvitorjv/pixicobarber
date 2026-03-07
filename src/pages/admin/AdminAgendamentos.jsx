@@ -39,7 +39,7 @@ export default function AdminAgendamentos() {
 
     // Supabase data
     const supabase = isSupabaseConfigured();
-    const { appointments: sbAppointments, loading: sbLoading } = useSupabaseAppointments();
+    const { appointments: sbAppointments, loading: sbLoading, refetch: refetchAppointments } = useSupabaseAppointments();
 
     // Leitura reativa — Supabase ou localStorage
     const agendamentos = (() => {
@@ -95,6 +95,7 @@ export default function AdminAgendamentos() {
         if (supabase) {
             try {
                 await updateAppointmentSupabase(ag.id, { status: 'aprovado' });
+                await refetchAppointments();
             } catch (err) { console.error('Erro ao aprovar:', err); }
         } else {
             appointmentStore.aprovar(ag.id, '');
@@ -125,6 +126,7 @@ export default function AdminAgendamentos() {
                 if (sugerirNovo && novaFaixaInicio) updates.faixaInicio = novaFaixaInicio;
                 if (sugerirNovo && novaFaixaFim) updates.faixaFim = novaFaixaFim;
                 await updateAppointmentSupabase(ag.id, updates);
+                await refetchAppointments();
             } catch (err) { console.error('Erro ao rejeitar:', err); }
         } else {
             const motivoFinal = motivosSelecionados.map(id => MOTIVOS_REJEICAO.find(m => m.id === id)?.label).filter(Boolean).join('; ') + (motivoTexto ? ` — ${motivoTexto}` : '');
@@ -150,6 +152,7 @@ export default function AdminAgendamentos() {
         if (supabase) {
             try {
                 await updateAppointmentSupabase(ag.id, { status: 'concluido' });
+                await refetchAppointments();
             } catch (err) { console.error('Erro ao concluir:', err); }
         } else {
             appointmentStore.concluir(ag.id, valor, formaPagamento);
@@ -163,6 +166,7 @@ export default function AdminAgendamentos() {
         if (supabase) {
             try {
                 await updateAppointmentSupabase(ag.id, { status: 'nao_compareceu' });
+                await refetchAppointments();
             } catch (err) { console.error('Erro:', err); }
         } else {
             appointmentStore.marcarNaoCompareceu(ag.id);
@@ -181,6 +185,7 @@ export default function AdminAgendamentos() {
                         faixaInicio: fi || ag.faixaInicio,
                         faixaFim: ff || ag.faixaFim,
                     });
+                    await refetchAppointments();
                 } catch (err) { console.error('Erro:', err); }
             } else {
                 appointmentStore.remarcar(ag.id, ag.sugestaoNovaData, fi || ag.faixaInicio, ff || ag.faixaFim);

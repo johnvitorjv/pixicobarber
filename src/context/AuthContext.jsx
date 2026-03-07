@@ -3,6 +3,7 @@ import clientStore from '../stores/clientStore';
 import notificationStore from '../stores/notificationStore';
 import { NOTIF_TIPOS, NOTIF_NIVEIS } from '../data/models';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { updateProfileSupabase } from '../hooks/useSupabase';
 
 // ═══════════════════════════════════════════════
 // PIXICO BARBER — Contexto de Autenticação v3 (Híbrido Supabase/Local)
@@ -126,11 +127,23 @@ export function AuthProvider({ children }) {
                 // Se há sessão (email confirmation desativado), setar user direto
                 if (data.session && data.user) {
                     const safeUser = await fetchAndSetUserData(data.user);
+                    // Gravar foto no profiles (trigger pode não copiar user_metadata)
+                    if (dados.fotoUrl) {
+                        try {
+                            await updateProfileSupabase(data.user.id, { foto_url: dados.fotoUrl });
+                        } catch (e) { console.warn('Não foi possível salvar foto no profile:', e); }
+                    }
                     return { success: true, user: safeUser };
                 }
 
                 // Se NÃO há sessão (email confirmation ativo)
                 if (data.user && !data.session) {
+                    // Mesmo assim tentar gravar foto no profiles
+                    if (dados.fotoUrl) {
+                        try {
+                            await updateProfileSupabase(data.user.id, { foto_url: dados.fotoUrl });
+                        } catch (e) { console.warn('Não foi possível salvar foto no profile:', e); }
+                    }
                     return {
                         success: false,
                         error: 'Cadastro realizado! Verifique seu e-mail para confirmar a conta antes de fazer login.',

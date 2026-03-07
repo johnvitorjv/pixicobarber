@@ -5,7 +5,7 @@ import { gerarLinkWhatsAppCliente } from '../../data/whatsappTemplates';
 import { STATUS } from '../../data/models';
 import { useStoreSync } from '../../hooks/useStore';
 import { isSupabaseConfigured } from '../../lib/supabase';
-import { useSupabaseClients, useSupabaseAppointments } from '../../hooks/useSupabase';
+import { useSupabaseClients, useSupabaseAppointments, updateProfileSupabase } from '../../hooks/useSupabase';
 import { Avatar } from '../../components/PhotoUpload';
 import {
     Search, Star, Ban, MessageCircle, Edit3, X, Eye, Tag, Plus, Trash2, User
@@ -27,7 +27,7 @@ export default function AdminClientes() {
 
     // Supabase data
     const sbConfigured = isSupabaseConfigured();
-    const { clients: sbClients, loading: sbClientsLoading } = useSupabaseClients();
+    const { clients: sbClients, loading: sbClientsLoading, refetch: refetchClients } = useSupabaseClients();
     const { appointments: sbApps } = useSupabaseAppointments();
 
     // Leitura reativa — Supabase ou localStorage
@@ -62,7 +62,17 @@ export default function AdminClientes() {
         setModal(null);
     }
 
-    function toggleFav(id) { clientStore.toggleFavorito(id); }
+    async function toggleFav(id) {
+        if (sbConfigured) {
+            const current = sbClients.find(c => c.id === id);
+            try {
+                await updateProfileSupabase(id, { favorito: !(current?.favorito) });
+                await refetchClients();
+            } catch (err) { console.error('Erro ao alternar favorito:', err); }
+        } else {
+            clientStore.toggleFavorito(id);
+        }
+    }
 
     function toggleBlacklist(id, blacklist) {
         if (blacklist) {

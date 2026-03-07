@@ -4,6 +4,8 @@ import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { ArrowUpRight, Menu, X, Phone, MapPin } from 'lucide-react';
 import serviceStore from './stores/serviceStore';
+import { isSupabaseConfigured } from './lib/supabase';
+import { useSupabaseServices } from './hooks/useSupabase';
 import { useStoreSync } from './hooks/useStore';
 
 function formatPreco(v) { return `R$ ${Number(v || 0).toFixed(0)}`; }
@@ -39,8 +41,7 @@ const CARD_VARIANTS = ['light', 'dark', 'accent'];
 const CARD_LABELS = { corte: 'Precisão', barba: 'Definição', combo: 'Completo', complemento: 'Detalhe', tratamento: 'Premium' };
 const CARD_FALLBACK_IMGS = ['/galeria/1.jpg', '/galeria/4.jpg', '/galeria/5.jpg'];
 
-function getCardsServicos() {
-  const servicos = serviceStore.getVisiveis('home');
+function getCardsServicos(servicos) {
   return servicos.slice(0, 3).map((s, i) => ({
     ref: `PX-${String(i + 1).padStart(2, '0')}`,
     num: String(i + 1).padStart(2, '0'),
@@ -352,6 +353,12 @@ function ServiceCard({ service, index }) {
    ───────────────────────────────────────────────── */
 function ServicosSection() {
   const sectionRef = useRef(null);
+  const sb = isSupabaseConfigured();
+  const { services: sbServices, getVisiveis } = useSupabaseServices();
+
+  // Fonte de verdade: Supabase (se configurado) ou localStorage
+  const servicosVisiveis = sb ? getVisiveis('home') : serviceStore.getVisiveis('home');
+  const cards = getCardsServicos(servicosVisiveis);
 
   useEffect(() => {
     const ctx = gsap.context(() => {
@@ -379,7 +386,7 @@ function ServicosSection() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-0">
-          {getCardsServicos().map((service, i) => (
+          {cards.map((service, i) => (
             <ServiceCard key={service.ref} service={service} index={i} />
           ))}
         </div>
