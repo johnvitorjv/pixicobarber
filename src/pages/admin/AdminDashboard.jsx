@@ -28,19 +28,19 @@ export default function AdminDashboard() {
     const agStats = {
         total: allApps.length,
         pendentes: allApps.filter(a => a.status === 'pendente').length,
-        aprovados: allApps.filter(a => a.status === 'aprovado').length,
+        aprovados: allApps.filter(a => a.status === 'confirmado').length,
         rejeitados: allApps.filter(a => a.status === 'rejeitado').length,
         aguardando: allApps.filter(a => a.status === 'aguardando_cliente').length,
         concluidos: allApps.filter(a => a.status === 'concluido').length,
         cancelados: allApps.filter(a => a.status === 'cancelado_cliente').length,
-        naoCompareceram: allApps.filter(a => a.status === 'nao_compareceu').length,
+        naoCompareceram: allApps.filter(a => a.status === 'ausente').length,
     };
 
     const clTotal = sb ? sbClients.length : clientStore.getAll().length;
 
     const hoje = new Date().toISOString().split('T')[0];
     const hojeApps = allApps
-        .filter(a => a.data === hoje && (a.status === 'aprovado' || a.status === 'pendente'))
+        .filter(a => a.data === hoje && (a.status === 'confirmado' || a.status === 'pendente'))
         .sort((a, b) => (a.faixaInicio || '').localeCompare(b.faixaInicio || ''));
     const pendentes = allApps.filter(a => a.status === 'pendente');
     const aguardando = allApps.filter(a => a.status === 'aguardando_cliente');

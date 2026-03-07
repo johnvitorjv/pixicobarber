@@ -135,7 +135,7 @@ export default function AdminClientes() {
                     {clientes.map(c => {
                         const clientApps = sbConfigured ? sbApps.filter(a => a.clienteId === c.id) : appointmentStore.getByClient(c.id);
                         const concluidos = clientApps.filter(a => a.status === STATUS.CONCLUIDO || a.status === 'concluido').length;
-                        const faltas = clientApps.filter(a => a.status === STATUS.NAO_COMPARECEU || a.status === 'nao_compareceu').length;
+                        const faltas = clientApps.filter(a => a.status === STATUS.NAO_COMPARECEU || a.status === 'ausente').length;
                         return (
                             <div key={c.id} className={`bg-zinc-900/60 border p-4 transition-all hover:bg-zinc-900/80 ${c.blacklist ? 'border-red-500/20' : c.favorito ? 'border-primary/20' : 'border-white/5'}`}>
                                 <div className="flex items-start justify-between mb-3">

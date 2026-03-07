@@ -104,44 +104,6 @@ export function AuthProvider({ children }) {
         }
     };
 
-    // Gravar dados do perfil após cadastro (com retry para race condition do trigger)
-    async function salvarPerfilAposCadastro(userId, dados) {
-        const profileData = {
-            id: userId,
-            nome: dados.nome || '',
-            sobrenome: dados.sobrenome || '',
-            whatsapp: dados.whatsapp || '',
-            foto_url: dados.fotoUrl || '',
-            nascimento: dados.nascimento || null,
-            observacoes: dados.observacoes || '',
-            role: 'client',
-        };
-
-        // Tentativa 1: upsert imediato
-        try {
-            const { error } = await supabase
-                .from('profiles')
-                .upsert(profileData, { onConflict: 'id' });
-            if (!error) return;
-            console.warn('Upsert tentativa 1 falhou:', error.message);
-        } catch (e) { console.warn('Upsert tentativa 1 erro:', e); }
-
-        // Tentativa 2: esperar trigger e depois dar update
-        await new Promise(r => setTimeout(r, 1500));
-        try {
-            const { error } = await supabase
-                .from('profiles')
-                .update({
-                    foto_url: dados.fotoUrl || '',
-                    nome: dados.nome || '',
-                    sobrenome: dados.sobrenome || '',
-                    whatsapp: dados.whatsapp || '',
-                })
-                .eq('id', userId);
-            if (error) console.warn('Update tentativa 2 falhou:', error.message);
-        } catch (e) { console.warn('Update tentativa 2 erro:', e); }
-    }
-
     // Cadastro
     async function registrar(dados) {
         if (isSupabaseConfigured()) {
@@ -162,20 +124,26 @@ export function AuthProvider({ children }) {
 
                 if (error) throw error;
 
-                // Gravar dados no profiles (foto, nome, etc.)
-                // O trigger handle_new_user pode não copiar user_metadata, então fazemos manualmente
-                if (data.user) {
-                    await salvarPerfilAposCadastro(data.user.id, dados);
-                }
-
                 // Se há sessão (email confirmation desativado), setar user direto
                 if (data.session && data.user) {
                     const safeUser = await fetchAndSetUserData(data.user);
+                    // Gravar foto no profiles (trigger pode não copiar user_metadata)
+                    if (dados.fotoUrl) {
+                        try {
+                            await updateProfileSupabase(data.user.id, { foto_url: dados.fotoUrl });
+                        } catch (e) { console.warn('Não foi possível salvar foto no profile:', e); }
+                    }
                     return { success: true, user: safeUser };
                 }
 
                 // Se NÃO há sessão (email confirmation ativo)
                 if (data.user && !data.session) {
+                    // Mesmo assim tentar gravar foto no profiles
+                    if (dados.fotoUrl) {
+                        try {
+                            await updateProfileSupabase(data.user.id, { foto_url: dados.fotoUrl });
+                        } catch (e) { console.warn('Não foi possível salvar foto no profile:', e); }
+                    }
                     return {
                         success: false,
                         error: 'Cadastro realizado! Verifique seu e-mail para confirmar a conta antes de fazer login.',

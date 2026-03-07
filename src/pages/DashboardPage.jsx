@@ -23,8 +23,8 @@ export default function DashboardPage() {
     const agendamentos = sb
         ? sbApps.filter(a => a.clienteId === user?.id)
         : appointmentStore.getByClient(user?.id);
-    const proximos = agendamentos.filter(a => ['pendente', 'aprovado', 'aguardando_cliente', 'remarcado'].includes(a.status));
-    const historico = agendamentos.filter(a => ['concluido', 'cancelado_cliente', 'rejeitado', 'nao_compareceu'].includes(a.status));
+    const proximos = agendamentos.filter(a => ['pendente', 'confirmado', 'aguardando_cliente', 'remarcado'].includes(a.status));
+    const historico = agendamentos.filter(a => ['concluido', 'cancelado_cliente', 'rejeitado', 'ausente'].includes(a.status));
     const notifs = notificationStore.getNaoLidasCliente(user?.id);
 
     function handleLogout() {
@@ -166,7 +166,7 @@ export default function DashboardPage() {
                                             <span className={`${status.bg} px-3 py-1 text-xs font-bold uppercase tracking-wider ${status.cor}`}>
                                                 {status.label}
                                             </span>
-                                            {(ag.status === 'pendente' || ag.status === 'aprovado') && (
+                                            {(ag.status === 'pendente' || ag.status === 'confirmado') && (
                                                 <button onClick={() => cancelarAgendamento(ag.id)}
                                                     className="text-zinc-600 hover:text-red-400 text-[10px] font-bold uppercase tracking-wider transition-colors">
                                                     Cancelar

@@ -5,13 +5,13 @@
 // ─── Status de Agendamento ───
 export const STATUS = {
     PENDENTE: 'pendente',
-    APROVADO: 'aprovado',
+    APROVADO: 'confirmado',
     REJEITADO: 'rejeitado',
     AGUARDANDO_CLIENTE: 'aguardando_cliente',
     REMARCADO: 'remarcado',
     CANCELADO_CLIENTE: 'cancelado_cliente',
     CONCLUIDO: 'concluido',
-    NAO_COMPARECEU: 'nao_compareceu',
+    NAO_COMPARECEU: 'ausente',
 };
 
 export const STATUS_CONFIG = {

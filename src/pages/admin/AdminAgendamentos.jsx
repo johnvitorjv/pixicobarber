@@ -23,7 +23,6 @@ export default function AdminAgendamentos() {
     const [busca, setBusca] = useState('');
     const [filtroData, setFiltroData] = useState('');
     const [modal, setModal] = useState(null);
-    const [actionLoading, setActionLoading] = useState(null); // ID do agendamento em ação
 
     // Rejeição state
     const [motivosSelecionados, setMotivosSelecionados] = useState([]);
@@ -84,24 +83,6 @@ export default function AdminAgendamentos() {
         return clientStore.getById(ag.clienteId) || { nome: 'Cliente', sobrenome: '', whatsapp: '' };
     }
 
-    // Aprovação DIRETA — sem modal, com feedback visual
-    async function aprovarDireto(ag) {
-        if (actionLoading) return; // Evitar cliques duplos
-        setActionLoading(ag.id);
-        try {
-            if (supabase) {
-                await updateAppointmentSupabase(ag.id, { status: 'aprovado' });
-                await refetchAppointments();
-            } else {
-                appointmentStore.aprovar(ag.id, '');
-            }
-        } catch (err) {
-            console.error('Erro ao aprovar:', err);
-            alert('Erro ao aprovar o agendamento. Tente novamente.');
-        }
-        setActionLoading(null);
-    }
-
     function abrirAprovar(ag) {
         const cliente = getCliente(ag);
         const msg = TEMPLATES.aprovacao({ nome: cliente?.nome || 'Cliente', data: ag.data, faixaInicio: ag.faixaInicio, faixaFim: ag.faixaFim });
@@ -111,19 +92,14 @@ export default function AdminAgendamentos() {
 
     async function confirmarAprovar() {
         const { ag } = modal;
-        setActionLoading(ag.id);
-        try {
-            if (supabase) {
-                await updateAppointmentSupabase(ag.id, { status: 'aprovado' });
+        if (supabase) {
+            try {
+                await updateAppointmentSupabase(ag.id, { status: 'confirmado' });
                 await refetchAppointments();
-            } else {
-                appointmentStore.aprovar(ag.id, '');
-            }
-        } catch (err) {
-            console.error('Erro ao aprovar:', err);
-            alert('Erro ao aprovar o agendamento. Tente novamente.');
+            } catch (err) { console.error('Erro ao aprovar:', err); }
+        } else {
+            appointmentStore.aprovar(ag.id, '');
         }
-        setActionLoading(null);
         setModal(null);
     }
 
@@ -189,7 +165,7 @@ export default function AdminAgendamentos() {
     async function handleNaoCompareceu(ag) {
         if (supabase) {
             try {
-                await updateAppointmentSupabase(ag.id, { status: 'nao_compareceu' });
+                await updateAppointmentSupabase(ag.id, { status: 'ausente' });
                 await refetchAppointments();
             } catch (err) { console.error('Erro:', err); }
         } else {
@@ -204,7 +180,7 @@ export default function AdminAgendamentos() {
             if (supabase) {
                 try {
                     await updateAppointmentSupabase(ag.id, {
-                        status: 'aprovado',
+                        status: 'confirmado',
                         data: ag.sugestaoNovaData,
                         faixaInicio: fi || ag.faixaInicio,
                         faixaFim: ff || ag.faixaFim,
@@ -305,16 +281,7 @@ export default function AdminAgendamentos() {
                                             <div className="flex items-center gap-1.5 flex-wrap">
                                                 {ag.status === STATUS.PENDENTE && (
                                                     <>
-                                                        <button
-                                                            onClick={() => aprovarDireto(ag)}
-                                                            disabled={actionLoading === ag.id}
-                                                            className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors ${actionLoading === ag.id
-                                                                    ? 'bg-green-500/30 text-green-300 cursor-wait'
-                                                                    : 'bg-green-500/10 text-green-400 hover:bg-green-500/20'
-                                                                }`}
-                                                        >
-                                                            {actionLoading === ag.id ? 'Aprovando...' : 'Aprovar'}
-                                                        </button>
+                                                        <button onClick={() => abrirAprovar(ag)} className="px-2 py-1 bg-green-500/10 text-green-400 text-[10px] font-bold uppercase tracking-wider hover:bg-green-500/20 transition-colors">Aprovar</button>
                                                         <button onClick={() => abrirRejeitar(ag)} className="px-2 py-1 bg-red-500/10 text-red-400 text-[10px] font-bold uppercase tracking-wider hover:bg-red-500/20 transition-colors">Rejeitar</button>
                                                     </>
                                                 )}
@@ -365,11 +332,12 @@ export default function AdminAgendamentos() {
                         className="w-full bg-black/50 border border-white/10 p-3 text-sm text-white font-modern focus:border-primary focus:outline-none h-28 resize-none mb-4"
                     />
                     <div className="flex gap-3">
-                        <button onClick={confirmarAprovar} disabled={actionLoading} className={`flex-1 py-3 font-display font-bold uppercase text-xs tracking-[0.3em] transition-colors ${actionLoading ? 'bg-green-500/30 text-green-300 cursor-wait' : 'bg-green-500 text-black hover:bg-green-400'}`}>{actionLoading ? 'Aprovando...' : 'Confirmar Aprovação'}</button>
+                        <button onClick={confirmarAprovar} className="flex-1 bg-green-500 text-black py-3 font-display font-bold uppercase text-xs tracking-[0.3em] hover:bg-green-400 transition-colors">Confirmar Aprovação</button>
                         <a
                             href={gerarLinkWhatsAppCliente(getCliente(modal.ag)?.whatsapp || '', mensagemWpp)}
                             target="_blank"
                             rel="noopener noreferrer"
+                            onClick={() => appointmentStore.marcarWhatsappEnviado(modal.ag.id)}
                             className="bg-[#25D366] text-white px-6 py-3 font-display font-bold uppercase text-xs tracking-[0.3em] flex items-center gap-2 hover:bg-[#20bd5a] transition-colors"
                         >
                             <MessageCircle size={16} /> WhatsApp
