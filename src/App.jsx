@@ -7,6 +7,7 @@ import serviceStore from './stores/serviceStore';
 import { isSupabaseConfigured } from './lib/supabase';
 import { useSupabaseServices } from './hooks/useSupabase';
 import { useStoreSync } from './hooks/useStore';
+import InstallPrompt from './components/InstallPrompt';
 
 function formatPreco(v) { return `R$ ${Number(v || 0).toFixed(0)}`; }
 
@@ -635,6 +636,7 @@ export default function App() {
       <GaleriaSection />
       <ContatoSection />
       <Rodape />
+      <InstallPrompt />
     </div>
   );
 }
