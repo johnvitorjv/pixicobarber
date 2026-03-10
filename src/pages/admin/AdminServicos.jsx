@@ -76,181 +76,190 @@ export default function AdminServicos() {
     }
 
     return (
-        <div className="p-6 lg:p-8">
+        <div className="p-6 md:p-10 max-w-[1600px] mx-auto">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
                 <div>
-                    <span className="text-[10px] font-bold uppercase tracking-[1em] text-primary mb-2 block">Gestão</span>
-                    <h1 className="font-display font-bold text-2xl md:text-3xl uppercase tracking-tight">Serviços</h1>
+                    <span className="text-[10px] font-bold uppercase tracking-[1em] text-primary mb-3 block">Catálogo</span>
+                    <h1 className="font-display font-bold text-3xl md:text-5xl uppercase tracking-tighter">Serviços</h1>
                 </div>
                 <button
                     onClick={() => setEditando('novo')}
-                    className="flex items-center gap-2 bg-primary text-black px-6 py-3 font-display font-bold uppercase text-xs tracking-[0.3em] hover:scale-[1.02] transition-transform"
+                    className="flex items-center justify-center gap-3 bg-primary text-black px-8 py-4 font-display font-bold uppercase text-xs tracking-[0.3em] hover:bg-white transition-colors"
                 >
-                    <Plus size={16} /> Novo Serviço
+                    <Plus size={16} /> Adicionar Serviço
                 </button>
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
                 {[
-                    { label: 'Total', valor: stats.total, cor: 'text-white', bg: 'bg-white/5' },
-                    { label: 'Ativos', valor: stats.ativos, cor: 'text-green-400', bg: 'bg-green-400/10' },
-                    { label: 'Inativos', valor: stats.inativos, cor: 'text-zinc-400', bg: 'bg-zinc-400/10' },
-                    { label: 'Destaque', valor: stats.destaque, cor: 'text-primary', bg: 'bg-primary/10' },
+                    { label: 'Total', valor: stats.total, cor: 'text-white' },
+                    { label: 'Ativos', valor: stats.ativos, cor: 'text-emerald-400' },
+                    { label: 'Inativos', valor: stats.inativos, cor: 'text-zinc-500' },
+                    { label: 'Destaque', valor: stats.destaque, cor: 'text-primary' },
                 ].map(card => (
-                    <div key={card.label} className={`${card.bg} border border-white/5 p-4`}>
-                        <span className={`text-2xl font-display font-bold ${card.cor}`}>{card.valor}</span>
-                        <span className="block text-[9px] font-bold uppercase tracking-[0.4em] text-zinc-500 mt-1">{card.label}</span>
+                    <div key={card.label} className="bg-black border border-white/5 p-6 hover:border-white/20 transition-colors">
+                        <span className={`text-4xl font-display font-bold tabular-nums mb-2 block ${card.cor}`}>{card.valor}</span>
+                        <span className="block text-[10px] font-bold uppercase tracking-[0.4em] text-zinc-500">{card.label}</span>
                     </div>
                 ))}
             </div>
 
             {/* Filters */}
-            <div className="flex flex-col sm:flex-row gap-3 mb-6">
+            <div className="flex flex-col md:flex-row gap-4 mb-8">
                 <div className="flex-1 relative">
-                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+                    <Search size={16} className="absolute left-0 top-1/2 -translate-y-1/2 text-zinc-600" />
                     <input
                         type="text"
                         value={busca}
                         onChange={e => setBusca(e.target.value)}
-                        placeholder="Buscar serviço..."
-                        className="w-full bg-black/50 border border-white/10 pl-10 pr-4 py-2.5 text-sm text-white font-modern focus:border-primary focus:outline-none transition-colors"
+                        placeholder="Buscar por nome, categoria ou badge..."
+                        className="w-full bg-transparent border-b border-white/20 pl-8 pr-4 py-3 text-sm text-white font-modern focus:border-primary focus:outline-none placeholder:text-zinc-700 transition-colors"
                     />
                 </div>
-                <select
-                    value={filtroStatus}
-                    onChange={e => setFiltroStatus(e.target.value)}
-                    className="bg-black/50 border border-white/10 px-4 py-2.5 text-sm text-white font-modern focus:border-primary focus:outline-none appearance-none cursor-pointer"
-                >
-                    {STATUS_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-                <select
-                    value={filtroCategoria}
-                    onChange={e => setFiltroCategoria(e.target.value)}
-                    className="bg-black/50 border border-white/10 px-4 py-2.5 text-sm text-white font-modern focus:border-primary focus:outline-none appearance-none cursor-pointer"
-                >
-                    <option value="">Todas categorias</option>
-                    {CATEGORIAS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                </select>
+                <div className="flex gap-4">
+                    <select
+                        value={filtroStatus}
+                        onChange={e => setFiltroStatus(e.target.value)}
+                        className="bg-black border-b border-white/20 px-4 py-3 text-sm text-white font-modern focus:border-primary focus:outline-none appearance-none cursor-pointer uppercase tracking-widest text-[10px] font-bold"
+                    >
+                        {STATUS_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                    <select
+                        value={filtroCategoria}
+                        onChange={e => setFiltroCategoria(e.target.value)}
+                        className="bg-black border-b border-white/20 px-4 py-3 text-sm text-white font-modern focus:border-primary focus:outline-none appearance-none cursor-pointer uppercase tracking-widest text-[10px] font-bold"
+                    >
+                        <option value="">Todas categorias</option>
+                        {CATEGORIAS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                    </select>
+                </div>
             </div>
 
             {/* Count */}
-            <span className="text-[10px] font-bold uppercase tracking-[0.5em] text-primary mb-4 block">
-                {filtrados.length} resultado(s)
-            </span>
+            <div className="flex items-center gap-3 mb-8">
+                <div className="h-px bg-white/10 flex-1" />
+                <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">
+                    {filtrados.length} serviço(s)
+                </span>
+                <div className="h-px bg-white/10 flex-1" />
+            </div>
 
             {/* Lista */}
             {filtrados.length === 0 ? (
-                <div className="text-center py-20">
-                    <Scissors size={48} className="text-zinc-800 mx-auto mb-4" />
-                    <p className="text-zinc-600 font-modern">Nenhum serviço encontrado.</p>
-                    <button onClick={() => setEditando('novo')} className="mt-4 text-primary text-sm font-modern hover:underline">
-                        Criar primeiro serviço
+                <div className="border border-white/5 bg-white/[0.02] p-24 text-center mt-8">
+                    <Scissors size={48} className="text-zinc-800 mx-auto mb-6" />
+                    <p className="text-zinc-600 font-modern text-sm uppercase tracking-widest">Nenhum serviço encontrado no catálogo.</p>
+                    <button onClick={() => setEditando('novo')} className="mt-6 text-primary border border-primary/20 bg-primary/5 px-6 py-3 font-display font-bold uppercase text-xs tracking-widest hover:bg-primary hover:text-black transition-colors">
+                        Cadastrar Primeiro Serviço
                     </button>
                 </div>
             ) : (
-                <div className="space-y-2">
+                <div className="space-y-3">
                     {filtrados.map((servico, idx) => (
                         <div
                             key={servico.id}
-                            className={`flex items-center gap-4 p-4 border transition-all hover:border-white/10 ${servico.status === 'inativo' ? 'border-white/5 opacity-50' : 'border-white/5'
-                                } bg-zinc-900/40`}
+                            className={`flex flex-col md:flex-row md:items-center gap-4 p-4 md:p-5 border transition-all hover:bg-white/[0.02] group ${servico.status === 'inativo' ? 'border-white/5 opacity-60' : 'border-white/5 hover:border-white/20'
+                                } bg-black`}
                         >
                             {/* Imagem */}
-                            <div className="w-14 h-14 flex-shrink-0 bg-zinc-800 overflow-hidden">
+                            <div className="w-20 h-20 md:w-24 md:h-24 flex-shrink-0 bg-zinc-900 border border-white/10 flex items-center justify-center transition-colors group-hover:border-primary/20">
                                 {servico.imagemUrl ? (
-                                    <img src={servico.imagemUrl} alt="" className="w-full h-full object-cover" />
+                                    <img src={servico.imagemUrl} alt="" className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500" />
                                 ) : (
-                                    <div className="w-full h-full flex items-center justify-center">
-                                        <Scissors size={20} className="text-zinc-600" />
-                                    </div>
+                                    <Scissors size={24} className="text-zinc-700" />
                                 )}
                             </div>
 
                             {/* Info */}
                             <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-0.5">
-                                    <span className="font-display font-bold text-sm uppercase tracking-tight truncate">
+                                <div className="flex flex-wrap items-center gap-3 mb-2">
+                                    <span className="font-display font-bold text-lg uppercase tracking-tight truncate group-hover:text-primary transition-colors">
                                         {servico.nome}
                                     </span>
                                     {servico.badge && (
-                                        <span className="text-[8px] font-bold uppercase tracking-wider bg-primary/10 text-primary px-2 py-0.5 flex-shrink-0">
+                                        <span className="text-[9px] font-bold uppercase tracking-widest bg-primary/10 border border-primary/20 text-primary px-3 py-1 flex-shrink-0">
                                             {servico.badge}
                                         </span>
                                     )}
                                     {servico.destaque && (
-                                        <Star size={12} className="text-primary flex-shrink-0" fill="currentColor" />
+                                        <Star size={14} className="text-primary flex-shrink-0 drop-shadow-[0_0_8px_rgba(212,175,55,0.5)]" fill="currentColor" />
                                     )}
                                 </div>
-                                <div className="flex items-center gap-3 text-[10px] text-zinc-500 font-modern">
-                                    <span>{CATEGORIAS.find(c => c.id === servico.categoria)?.label || servico.categoria}</span>
-                                    <span>·</span>
-                                    <span>{servico.duracao}min</span>
-                                    <span>·</span>
-                                    <span className={servico.status === 'ativo' ? 'text-green-400' : 'text-red-400'}>
+                                <div className="flex flex-wrap items-center gap-4 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                                    <span className="text-zinc-400">{CATEGORIAS.find(c => c.id === servico.categoria)?.label || servico.categoria}</span>
+                                    <span className="hidden md:inline text-zinc-700">|</span>
+                                    <span>{servico.duracao} min</span>
+                                    <span className="hidden md:inline text-zinc-700">|</span>
+                                    <span className={`px-2 py-0.5 border ${servico.status === 'ativo' ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10' : 'border-zinc-500/30 text-zinc-400 bg-zinc-500/10'}`}>
                                         {servico.status}
                                     </span>
                                 </div>
                             </div>
 
                             {/* Preço */}
-                            <div className="text-right flex-shrink-0">
+                            <div className="text-left md:text-right flex-shrink-0 min-w-[120px] bg-white/[0.02] border border-white/5 p-3 md:bg-transparent md:border-none md:p-0">
                                 {servico.precoPromocional ? (
-                                    <>
-                                        <span className="text-zinc-500 line-through text-xs font-modern block">{formatPreco(servico.preco)}</span>
-                                        <span className="text-primary font-display font-bold text-sm">{formatPreco(servico.precoPromocional)}</span>
-                                    </>
+                                    <div className="flex md:flex-col items-center md:items-end justify-between md:justify-center gap-2 md:gap-0">
+                                        <span className="text-zinc-500 line-through text-[10px] font-modern font-bold uppercase tracking-widest">{formatPreco(servico.preco)}</span>
+                                        <span className="text-primary font-display font-bold text-xl tabular-nums">{formatPreco(servico.precoPromocional)}</span>
+                                    </div>
                                 ) : (
-                                    <span className="text-white font-display font-bold text-sm">{formatPreco(servico.preco)}</span>
+                                    <span className="text-white font-display font-bold text-xl tabular-nums block text-center md:text-right w-full">{formatPreco(servico.preco)}</span>
                                 )}
                             </div>
 
-                            {/* Ordem */}
-                            <div className="flex flex-col gap-0.5 flex-shrink-0">
-                                <button onClick={async () => {
-                                    if (sb) {
-                                        const s = todos.find(x => x.id === servico.id);
-                                        const idx = todos.indexOf(s);
-                                        if (idx > 0) {
-                                            await updateServiceSupabase(servico.id, { ordem: todos[idx - 1].ordem });
-                                            await updateServiceSupabase(todos[idx - 1].id, { ordem: servico.ordem });
-                                            refetchServices();
-                                        }
-                                    } else { serviceStore.moveUp(servico.id); }
-                                }} className="text-zinc-600 hover:text-primary transition-colors p-0.5">
-                                    <ChevronUp size={14} />
-                                </button>
-                                <span className="text-[9px] text-zinc-600 text-center font-mono">{servico.ordem}</span>
-                                <button onClick={async () => {
-                                    if (sb) {
-                                        const s = todos.find(x => x.id === servico.id);
-                                        const idx = todos.indexOf(s);
-                                        if (idx < todos.length - 1) {
-                                            await updateServiceSupabase(servico.id, { ordem: todos[idx + 1].ordem });
-                                            await updateServiceSupabase(todos[idx + 1].id, { ordem: servico.ordem });
-                                            refetchServices();
-                                        }
-                                    } else { serviceStore.moveDown(servico.id); }
-                                }} className="text-zinc-600 hover:text-primary transition-colors p-0.5">
-                                    <ChevronDown size={14} />
-                                </button>
-                            </div>
+                            {/* Divider para mobile */}
+                            <div className="h-px w-full bg-white/5 md:hidden block my-2" />
 
-                            {/* Ações */}
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                                <button onClick={() => handleToggleStatus(servico.id)} className="p-2 text-zinc-500 hover:text-white transition-colors" title={servico.status === 'ativo' ? 'Desativar' : 'Ativar'}>
-                                    {servico.status === 'ativo' ? <ToggleRight size={18} className="text-green-400" /> : <ToggleLeft size={18} />}
-                                </button>
-                                <button onClick={() => handleDuplicate(servico.id)} className="p-2 text-zinc-500 hover:text-white transition-colors" title="Duplicar">
-                                    <Copy size={14} />
-                                </button>
-                                <button onClick={() => setEditando(servico.id)} className="p-2 text-zinc-500 hover:text-primary transition-colors" title="Editar">
-                                    <Edit3 size={14} />
-                                </button>
-                                <button onClick={() => setConfirmDelete(servico.id)} className="p-2 text-zinc-500 hover:text-red-400 transition-colors" title="Excluir">
-                                    <Trash2 size={14} />
-                                </button>
+                            <div className="flex items-center justify-between md:justify-end gap-6 w-full md:w-auto">
+                                {/* Ordem */}
+                                <div className="flex items-center gap-2 flex-shrink-0 bg-white/[0.02] border border-white/5 px-2 py-1">
+                                    <button onClick={async () => {
+                                        if (sb) {
+                                            const s = todos.find(x => x.id === servico.id);
+                                            const idx = todos.indexOf(s);
+                                            if (idx > 0) {
+                                                await updateServiceSupabase(servico.id, { ordem: todos[idx - 1].ordem });
+                                                await updateServiceSupabase(todos[idx - 1].id, { ordem: servico.ordem });
+                                                refetchServices();
+                                            }
+                                        } else { serviceStore.moveUp(servico.id); }
+                                    }} className="text-zinc-600 hover:text-primary transition-colors p-1">
+                                        <ChevronUp size={16} />
+                                    </button>
+                                    <span className="text-[10px] text-zinc-500 font-bold w-4 text-center tabular-nums">{servico.ordem}</span>
+                                    <button onClick={async () => {
+                                        if (sb) {
+                                            const s = todos.find(x => x.id === servico.id);
+                                            const idx = todos.indexOf(s);
+                                            if (idx < todos.length - 1) {
+                                                await updateServiceSupabase(servico.id, { ordem: todos[idx + 1].ordem });
+                                                await updateServiceSupabase(todos[idx + 1].id, { ordem: servico.ordem });
+                                                refetchServices();
+                                            }
+                                        } else { serviceStore.moveDown(servico.id); }
+                                    }} className="text-zinc-600 hover:text-primary transition-colors p-1">
+                                        <ChevronDown size={16} />
+                                    </button>
+                                </div>
+
+                                {/* Ações */}
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                    <button onClick={() => handleToggleStatus(servico.id)} className="p-2 border border-white/5 hover:bg-white/[0.05] text-zinc-400 hover:text-white transition-colors" title={servico.status === 'ativo' ? 'Desativar' : 'Ativar'}>
+                                        {servico.status === 'ativo' ? <ToggleRight size={16} className="text-emerald-400" /> : <ToggleLeft size={16} />}
+                                    </button>
+                                    <button onClick={() => handleDuplicate(servico.id)} className="p-2 border border-white/5 hover:bg-white/[0.05] text-zinc-400 hover:text-white transition-colors" title="Duplicar">
+                                        <Copy size={14} />
+                                    </button>
+                                    <button onClick={() => setEditando(servico.id)} className="p-2 border border-white/5 hover:bg-primary/20 hover:border-primary/50 text-zinc-400 hover:text-primary transition-colors" title="Editar">
+                                        <Edit3 size={14} />
+                                    </button>
+                                    <button onClick={() => setConfirmDelete(servico.id)} className="p-2 border border-white/5 hover:bg-red-500/10 hover:border-red-500/50 text-zinc-400 hover:text-red-400 transition-colors" title="Excluir">
+                                        <Trash2 size={14} />
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     ))}
@@ -271,17 +280,20 @@ export default function AdminServicos() {
             {/* Confirm Delete */}
             {confirmDelete && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setConfirmDelete(null)}>
-                    <div className="absolute inset-0 bg-black/80" />
-                    <div className="relative bg-zinc-900 border border-white/10 p-6 max-w-sm w-full" onClick={e => e.stopPropagation()}>
-                        <h3 className="font-display font-bold text-lg uppercase mb-3">Excluir Serviço?</h3>
-                        <p className="text-zinc-400 font-modern text-sm mb-6">
-                            "{todos.find(s => s.id === confirmDelete)?.nome || ''}" será removido permanentemente. Esta ação não pode ser desfeita.
+                    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm" />
+                    <div className="relative bg-[#0a0a0a] border border-red-500/20 p-8 max-w-sm w-full shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center mb-6">
+                            <Trash2 size={24} className="text-red-500" />
+                        </div>
+                        <h3 className="font-display font-bold text-xl uppercase tracking-tighter mb-4">Excluir Serviço?</h3>
+                        <p className="text-zinc-400 font-modern text-sm leading-relaxed mb-8">
+                            Tem certeza que deseja remover <strong className="text-white font-bold">"{todos.find(s => s.id === confirmDelete)?.nome || ''}"</strong> permanentemente? Esta ação não poderá ser desfeita.
                         </p>
-                        <div className="flex gap-3">
-                            <button onClick={() => setConfirmDelete(null)} className="flex-1 border border-white/10 py-3 text-sm font-display uppercase tracking-wider hover:bg-white/5 transition-colors">
+                        <div className="flex gap-4">
+                            <button onClick={() => setConfirmDelete(null)} className="flex-1 border border-white/10 py-4 text-[10px] font-bold font-display uppercase tracking-widest hover:bg-white/5 hover:text-white text-zinc-400 transition-colors">
                                 Cancelar
                             </button>
-                            <button onClick={() => handleDelete(confirmDelete)} className="flex-1 bg-red-500 text-white py-3 text-sm font-display uppercase tracking-wider hover:bg-red-600 transition-colors">
+                            <button onClick={() => handleDelete(confirmDelete)} className="flex-1 bg-red-500 text-white py-4 text-[10px] font-bold font-display uppercase tracking-widest hover:bg-red-600 transition-colors">
                                 Excluir
                             </button>
                         </div>
@@ -370,160 +382,174 @@ function ServiceModal({ serviceId, onClose, sb, sbServices, refetchServices }) {
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-8 overflow-y-auto" onClick={onClose}>
-            <div className="absolute inset-0 bg-black/80" />
-            <div className="relative bg-zinc-900 border border-white/10 w-full max-w-2xl my-8" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-8 md:pt-12 overflow-y-auto" onClick={onClose}>
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm" />
+            <div className="relative bg-[#0a0a0a] border border-white/10 w-full max-w-3xl my-8 shadow-2xl" onClick={e => e.stopPropagation()}>
                 {/* Header */}
-                <div className="flex items-center justify-between p-6 border-b border-white/5">
-                    <h3 className="font-display font-bold text-lg uppercase tracking-tight">
-                        {serviceId ? 'Editar Serviço' : 'Novo Serviço'}
-                    </h3>
-                    <button onClick={onClose} className="text-zinc-500 hover:text-white transition-colors">
+                <div className="flex items-center justify-between p-6 md:p-8 border-b border-white/5 bg-white/[0.02]">
+                    <div>
+                        <span className="text-[10px] font-bold uppercase tracking-[0.5em] text-primary mb-2 block">Catálogo</span>
+                        <h3 className="font-display font-bold text-2xl uppercase tracking-tighter">
+                            {serviceId ? 'Editar Serviço' : 'Novo Serviço'}
+                        </h3>
+                    </div>
+                    <button onClick={onClose} className="p-3 bg-white/[0.05] hover:bg-white/10 text-white transition-colors">
                         <X size={20} />
                     </button>
                 </div>
 
                 {/* Form */}
-                <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
+                <div className="p-6 md:p-8 space-y-8">
                     {/* Imagem */}
-                    <div className="flex items-center gap-4">
-                        <div
-                            className="w-20 h-20 bg-zinc-800 border border-white/10 overflow-hidden cursor-pointer flex items-center justify-center hover:border-primary/50 transition-colors"
-                            onClick={() => inputRef.current?.click()}
-                        >
-                            {form.imagemUrl ? (
-                                <img src={form.imagemUrl} alt="" className="w-full h-full object-cover" />
-                            ) : (
-                                <Camera size={24} className="text-zinc-600" />
-                            )}
-                        </div>
-                        <div>
-                            <button onClick={() => inputRef.current?.click()} className="text-sm text-primary font-modern hover:underline">
-                                {form.imagemUrl ? 'Trocar imagem' : 'Upload imagem'}
-                            </button>
-                            {form.imagemUrl && (
-                                <button onClick={() => handleChange('imagemUrl', '')} className="block text-xs text-red-400 font-modern hover:underline mt-1">
-                                    Remover
+                    <div>
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-4 block">Capa do Serviço</label>
+                        <div className="flex items-center gap-6">
+                            <div
+                                className="w-24 h-24 bg-black border border-white/10 overflow-hidden cursor-pointer flex items-center justify-center hover:border-primary/50 transition-colors group"
+                                onClick={() => inputRef.current?.click()}
+                            >
+                                {form.imagemUrl ? (
+                                    <img src={form.imagemUrl} alt="" className="w-full h-full object-cover group-hover:opacity-80 transition-opacity" />
+                                ) : (
+                                    <Camera size={24} className="text-zinc-600 group-hover:scale-110 transition-transform" />
+                                )}
+                            </div>
+                            <div>
+                                <button onClick={() => inputRef.current?.click()} className="text-sm font-bold uppercase tracking-widest text-primary border-b border-primary/30 pb-1 hover:border-primary transition-colors">
+                                    {form.imagemUrl ? 'Alterar Imagem' : 'Fazer Upload'}
                                 </button>
-                            )}
-                            <p className="text-[10px] text-zinc-600 mt-1">JPG, PNG ou WebP · Máx 2MB</p>
+                                {form.imagemUrl && (
+                                    <button onClick={() => handleChange('imagemUrl', '')} className="block text-xs font-bold uppercase tracking-widest text-red-400 mt-3 hover:text-red-300 transition-colors">
+                                        Remover
+                                    </button>
+                                )}
+                                <p className="text-[10px] text-zinc-600 uppercase tracking-widest mt-4">JPG/PNG/WEBP · MÁX 2MB</p>
+                            </div>
+                            <input ref={inputRef} type="file" accept={ACCEPTED_TYPES.join(',')} onChange={e => e.target.files[0] && processImage(e.target.files[0])} className="hidden" />
                         </div>
-                        <input ref={inputRef} type="file" accept={ACCEPTED_TYPES.join(',')} onChange={e => e.target.files[0] && processImage(e.target.files[0])} className="hidden" />
                     </div>
 
-                    {/* Nome */}
-                    <div>
-                        <label className="text-[10px] font-bold uppercase tracking-[0.5em] text-zinc-500 mb-2 block">Nome *</label>
-                        <input type="text" value={form.nome} onChange={e => handleChange('nome', e.target.value)}
-                            className="w-full bg-black/50 border border-white/10 px-4 py-3 text-white font-modern focus:border-primary focus:outline-none transition-colors"
-                            placeholder="Ex: Corte + Barba" />
+                    <div className="h-px bg-white/5 w-full" />
+
+                    {/* Nome & Preço Básicos */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="md:col-span-2">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3 block">Nome do Serviço *</label>
+                            <input type="text" value={form.nome} onChange={e => handleChange('nome', e.target.value)}
+                                className="w-full bg-black border border-white/10 px-4 py-3 text-white font-modern focus:border-primary focus:outline-none transition-colors"
+                                placeholder="Ex: Corte + Barba Premium" />
+                        </div>
+
+                        <div>
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3 block">Preço Padrão (R$)</label>
+                            <input type="number" value={form.preco} onChange={e => handleChange('preco', e.target.value)}
+                                className="w-full bg-black border border-white/10 px-4 py-3 text-white font-modern focus:border-primary focus:outline-none transition-colors" />
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3 block flex items-center gap-2">
+                                Preço Promocional (R$) <span className="text-primary font-normal normal-case tracking-normal">(Opcional)</span>
+                            </label>
+                            <input type="number" value={form.precoPromocional} onChange={e => handleChange('precoPromocional', e.target.value)}
+                                className="w-full bg-black border border-white/10 px-4 py-3 text-primary font-bold focus:border-primary focus:outline-none transition-colors"
+                                placeholder="Deixe vazio para não usar" />
+                        </div>
                     </div>
 
                     {/* Descrições */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-6">
                         <div>
-                            <label className="text-[10px] font-bold uppercase tracking-[0.5em] text-zinc-500 mb-2 block">Descrição curta</label>
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3 block">Resumo Curto (Para Cards)</label>
                             <input type="text" value={form.descricaoCurta} onChange={e => handleChange('descricaoCurta', e.target.value)}
-                                className="w-full bg-black/50 border border-white/10 px-4 py-3 text-white font-modern focus:border-primary focus:outline-none transition-colors text-sm"
-                                placeholder="Resumo para cards" />
+                                className="w-full bg-black border border-white/10 px-4 py-3 text-white font-modern focus:border-primary focus:outline-none transition-colors text-sm"
+                                placeholder="Ex: Apenas máquina, finalização rápida" />
                         </div>
                         <div>
-                            <label className="text-[10px] font-bold uppercase tracking-[0.5em] text-zinc-500 mb-2 block">Descrição detalhada</label>
-                            <input type="text" value={form.descricaoDetalhada} onChange={e => handleChange('descricaoDetalhada', e.target.value)}
-                                className="w-full bg-black/50 border border-white/10 px-4 py-3 text-white font-modern focus:border-primary focus:outline-none transition-colors text-sm"
-                                placeholder="Descrição completa" />
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3 block">Descrição Detalhada</label>
+                            <textarea value={form.descricaoDetalhada} onChange={e => handleChange('descricaoDetalhada', e.target.value)}
+                                className="w-full bg-black border border-white/10 px-4 py-3 text-white font-modern focus:border-primary focus:outline-none transition-colors text-sm min-h-[100px] resize-y"
+                                placeholder="Descreva tudo que o cliente recebe neste serviço..." />
                         </div>
                     </div>
 
-                    {/* Preço, Promo, Duração */}
-                    <div className="grid grid-cols-3 gap-4">
+                    {/* Informações Operacionais */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                         <div>
-                            <label className="text-[10px] font-bold uppercase tracking-[0.5em] text-zinc-500 mb-2 block">Preço (R$)</label>
-                            <input type="number" value={form.preco} onChange={e => handleChange('preco', e.target.value)}
-                                className="w-full bg-black/50 border border-white/10 px-4 py-3 text-white font-modern focus:border-primary focus:outline-none transition-colors" />
-                        </div>
-                        <div>
-                            <label className="text-[10px] font-bold uppercase tracking-[0.5em] text-zinc-500 mb-2 block">Promo (R$)</label>
-                            <input type="number" value={form.precoPromocional} onChange={e => handleChange('precoPromocional', e.target.value)}
-                                className="w-full bg-black/50 border border-white/10 px-4 py-3 text-white font-modern focus:border-primary focus:outline-none transition-colors"
-                                placeholder="Vazio = sem" />
-                        </div>
-                        <div>
-                            <label className="text-[10px] font-bold uppercase tracking-[0.5em] text-zinc-500 mb-2 block">Duração (min)</label>
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3 block">Tempo (min)</label>
                             <input type="number" value={form.duracao} onChange={e => handleChange('duracao', e.target.value)}
-                                className="w-full bg-black/50 border border-white/10 px-4 py-3 text-white font-modern focus:border-primary focus:outline-none transition-colors" />
+                                className="w-full bg-black border border-white/10 px-4 py-3 text-white font-modern focus:border-primary focus:outline-none transition-colors" />
                         </div>
-                    </div>
-
-                    {/* Categoria, Badge */}
-                    <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="text-[10px] font-bold uppercase tracking-[0.5em] text-zinc-500 mb-2 block">Categoria</label>
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3 block">Categoria</label>
                             <select value={form.categoria} onChange={e => handleChange('categoria', e.target.value)}
-                                className="w-full bg-black/50 border border-white/10 px-4 py-3 text-white font-modern focus:border-primary focus:outline-none appearance-none cursor-pointer">
+                                className="w-full bg-black border border-white/10 px-4 py-3 text-white font-modern focus:border-primary focus:outline-none appearance-none cursor-pointer uppercase text-xs">
                                 {CATEGORIAS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="text-[10px] font-bold uppercase tracking-[0.5em] text-zinc-500 mb-2 block">Badge</label>
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3 block">Selo / Badge</label>
                             <select value={form.badge} onChange={e => handleChange('badge', e.target.value)}
-                                className="w-full bg-black/50 border border-white/10 px-4 py-3 text-white font-modern focus:border-primary focus:outline-none appearance-none cursor-pointer">
-                                <option value="">Nenhum</option>
+                                className="w-full bg-black border border-white/10 px-4 py-3 text-primary font-bold focus:border-primary focus:outline-none appearance-none cursor-pointer uppercase text-xs">
+                                <option value="">Nenhum Selo</option>
                                 {BADGES.map(b => <option key={b.id} value={b.id}>{b.label}</option>)}
                             </select>
                         </div>
                     </div>
 
+                    <div className="h-px bg-white/5 w-full" />
+
                     {/* Visibilidade */}
                     <div>
-                        <label className="text-[10px] font-bold uppercase tracking-[0.5em] text-zinc-500 mb-3 block">Visibilidade</label>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-4 block">Onde este serviço será exibido?</label>
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                             {[
-                                { key: 'destaque', label: 'Destaque', icon: Star },
-                                { key: 'visivelHome', label: 'Home', icon: Eye },
-                                { key: 'visivelCliente', label: 'Painel Cliente', icon: Eye },
-                                { key: 'visivelAgendamento', label: 'Agendamento', icon: Eye },
+                                { key: 'destaque', label: 'Estrela', icon: Star },
+                                { key: 'visivelHome', label: 'Homepage', icon: Eye },
+                                { key: 'visivelCliente', label: 'Conta Cliente', icon: Eye },
+                                { key: 'visivelAgendamento', label: 'App Agenda', icon: Eye },
                             ].map(opt => (
                                 <button
                                     key={opt.key}
                                     type="button"
                                     onClick={() => handleChange(opt.key, !form[opt.key])}
-                                    className={`flex items-center gap-2 p-3 border text-xs font-modern transition-all ${form[opt.key]
-                                        ? 'border-primary/30 bg-primary/5 text-primary'
-                                        : 'border-white/5 text-zinc-500 hover:border-white/10'
+                                    className={`flex items-center gap-3 p-4 border text-xs font-bold uppercase tracking-widest transition-all ${form[opt.key]
+                                        ? 'border-primary/50 bg-primary/10 text-primary'
+                                        : 'border-white/5 bg-white/[0.02] text-zinc-500 hover:border-white/20 hover:text-white'
                                         }`}
                                 >
-                                    {form[opt.key] ? <Check size={14} /> : <opt.icon size={14} />}
-                                    {opt.label}
+                                    {form[opt.key] ? <Check size={16} /> : <opt.icon size={16} />}
+                                    <span className="truncate">{opt.label}</span>
                                 </button>
                             ))}
                         </div>
                     </div>
 
-                    {/* Status */}
-                    <div className="flex items-center gap-3">
-                        <label className="text-[10px] font-bold uppercase tracking-[0.5em] text-zinc-500">Status</label>
+                    {/* Status Global */}
+                    <div className="bg-white/[0.02] border border-white/5 p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div>
+                            <h4 className="text-white font-display font-bold uppercase tracking-tight mb-1">Status Global</h4>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Se inativo, fica oculto e bloqueado no agendamento</p>
+                        </div>
                         <button
                             type="button"
                             onClick={() => handleChange('status', form.status === 'ativo' ? 'inativo' : 'ativo')}
-                            className={`flex items-center gap-2 px-4 py-2 text-xs font-modern transition-all border ${form.status === 'ativo'
-                                ? 'border-green-500/30 bg-green-500/10 text-green-400'
-                                : 'border-red-500/30 bg-red-500/10 text-red-400'
+                            className={`flex items-center gap-3 px-6 py-3 text-xs font-bold uppercase tracking-widest transition-all border ${form.status === 'ativo'
+                                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                                : 'border-zinc-500/30 bg-zinc-500/10 text-zinc-400'
                                 }`}
                         >
-                            {form.status === 'ativo' ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
-                            {form.status === 'ativo' ? 'Ativo' : 'Inativo'}
+                            {form.status === 'ativo' ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
+                            {form.status === 'ativo' ? 'Ativo no Sistema' : 'Inativo / Arquivado'}
                         </button>
                     </div>
                 </div>
 
                 {/* Footer */}
-                <div className="p-6 border-t border-white/5 flex gap-3">
-                    <button onClick={onClose} className="flex-1 border border-white/10 py-3 font-display font-bold uppercase text-xs tracking-[0.3em] hover:bg-white/5 transition-colors">
+                <div className="p-6 border-t border-white/5 flex gap-4 bg-black">
+                    <button onClick={onClose} className="flex-1 border border-white/10 py-4 font-display font-bold uppercase text-xs tracking-[0.3em] hover:bg-white/5 transition-colors">
                         Cancelar
                     </button>
-                    <button onClick={handleSave} className="flex-1 bg-primary text-black py-3 font-display font-bold uppercase text-xs tracking-[0.3em] hover:scale-[1.02] transition-transform flex items-center justify-center gap-2">
-                        <Save size={14} /> Salvar
+                    <button onClick={handleSave} className="flex-1 bg-primary text-black py-4 font-display font-bold uppercase text-xs tracking-[0.3em] hover:bg-white transition-colors flex items-center justify-center gap-2">
+                        <Save size={16} /> {serviceId ? 'Atualizar Serviço' : 'Criar Serviço'}
                     </button>
                 </div>
             </div>

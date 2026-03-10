@@ -138,54 +138,60 @@ export default function AdminCalendario() {
     }
 
     return (
-        <div className="p-6 lg:p-8">
+        <div className="p-6 md:p-10 max-w-[1600px] mx-auto">
             {/* Header */}
-            <div className="mb-6">
-                <span className="text-[10px] font-bold uppercase tracking-[1em] text-primary mb-2 block">Visão Temporal</span>
-                <h1 className="font-display font-bold text-2xl md:text-3xl uppercase tracking-tight">Calendário</h1>
+            <div className="mb-12">
+                <span className="text-[10px] font-bold uppercase tracking-[1em] text-primary mb-3 block">Timeline</span>
+                <h1 className="font-display font-bold text-3xl md:text-5xl uppercase tracking-tighter">Calendário</h1>
             </div>
 
             {/* Controls */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+            <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-6 mb-10">
                 {/* Nav */}
-                <div className="flex items-center gap-3">
-                    <button onClick={navAnterior} className="p-2 border border-white/10 hover:border-primary/30 transition-colors">
+                <div className="flex items-center gap-4">
+                    <button onClick={navAnterior} className="p-3 border border-white/10 hover:border-primary/50 text-zinc-400 hover:text-white transition-all bg-black">
                         <ChevronLeft size={16} />
                     </button>
-                    <h2 className="font-modern text-sm min-w-48 text-center">{getTitulo()}</h2>
-                    <button onClick={navProximo} className="p-2 border border-white/10 hover:border-primary/30 transition-colors">
+                    <div className="flex flex-col items-center justify-center min-w-[200px]">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1">Período</span>
+                        <h2 className="font-modern text-lg text-white">{getTitulo()}</h2>
+                    </div>
+                    <button onClick={navProximo} className="p-3 border border-white/10 hover:border-primary/50 text-zinc-400 hover:text-white transition-all bg-black">
                         <ChevronRight size={16} />
-                    </button>
-                    <button onClick={irHoje} className="text-[10px] font-bold uppercase tracking-wider text-primary border border-primary/20 px-3 py-2 hover:bg-primary/5 transition-colors ml-2">
-                        Hoje
                     </button>
                 </div>
 
-                {/* Visão toggle */}
-                <div className="flex border border-white/10">
-                    {[
-                        { key: 'dia', label: 'Dia' },
-                        { key: 'semana', label: 'Semana' },
-                    ].map(v => (
-                        <button
-                            key={v.key}
-                            onClick={() => setVisao(v.key)}
-                            className={`px-4 py-2 text-xs font-display uppercase tracking-wider transition-colors ${visao === v.key ? 'bg-primary text-black' : 'text-zinc-500 hover:text-white'
-                                }`}
-                        >
-                            {v.label}
-                        </button>
-                    ))}
+                <div className="flex items-center gap-4 w-full md:w-auto">
+                    <button onClick={irHoje} className="px-6 py-3 border border-white/10 hover:border-primary/30 text-[10px] font-bold uppercase tracking-widest text-white hover:text-primary transition-all flex-1 md:flex-none text-center bg-black">
+                        Mover p/ Hoje
+                    </button>
+
+                    {/* Visão toggle */}
+                    <div className="flex border border-white/10 p-1 bg-black w-full md:w-auto">
+                        {[
+                            { key: 'dia', label: 'Dia' },
+                            { key: 'semana', label: 'Semana' },
+                        ].map(v => (
+                            <button
+                                key={v.key}
+                                onClick={() => setVisao(v.key)}
+                                className={`flex-1 md:flex-none px-6 py-2.5 text-[10px] font-bold uppercase tracking-widest transition-all ${visao === v.key ? 'bg-white/10 text-white' : 'text-zinc-500 hover:text-white hover:bg-white/5'
+                                    }`}
+                            >
+                                {v.label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
 
             {/* Legenda */}
-            <div className="flex items-center gap-5 mb-4 text-[10px] font-modern text-zinc-500">
-                <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-green-500/20 border border-green-500/30 inline-block" /> Livre</span>
-                <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-primary/20 border border-primary/30 inline-block" /> Agendado</span>
-                <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-yellow-500/20 border border-yellow-500/30 inline-block" /> Pendente</span>
-                <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-zinc-700 border border-zinc-600 inline-block" /> Almoço</span>
-                <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-red-500/10 border border-red-500/20 inline-block" /> Bloqueado</span>
+            <div className="flex flex-wrap items-center gap-x-8 gap-y-3 mb-8 text-[9px] font-bold uppercase tracking-widest text-zinc-500 border-b border-white/5 pb-6">
+                <span className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-green-500/50 shadow-[0_0_8px_rgba(34,197,94,0.5)]" /> Livre</span>
+                <span className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-primary/80 shadow-[0_0_8px_rgba(212,175,55,0.4)]" /> Agendado</span>
+                <span className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-yellow-500/50" /> Pendente</span>
+                <span className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-zinc-600" /> Almoço</span>
+                <span className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-red-500/50" /> Bloqueado</span>
             </div>
 
             {/* Grid do calendário */}
@@ -201,18 +207,18 @@ export default function AdminCalendario() {
                         const numAg = getAgendamentosDia(dk).length;
 
                         return (
-                            <div key={dk} className={`border-b border-l border-white/10 p-2 text-center ${isHoje ? 'bg-primary/5' : ''}`}>
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 block">
+                            <div key={dk} className={`border-b border-l border-white/5 p-4 text-center ${isHoje ? 'bg-primary/5' : 'bg-black'} transition-colors`}>
+                                <span className={`text-[10px] font-bold uppercase tracking-widest block mb-1 ${isHoje ? 'text-primary' : 'text-zinc-500'}`}>
                                     {DIAS_SEMANA[dia.getDay()]}
                                 </span>
-                                <span className={`font-display font-bold text-lg ${isHoje ? 'text-primary' : 'text-white'}`}>
+                                <span className={`font-display font-bold text-2xl ${isHoje ? 'text-primary' : 'text-white'}`}>
                                     {dia.getDate()}
                                 </span>
                                 {bloqueado ? (
-                                    <span className="flex items-center justify-center gap-1 text-[9px] text-red-400 mt-0.5"><Lock size={8} /> Bloqueado</span>
+                                    <span className="flex items-center justify-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-red-400 mt-2 bg-red-500/10 py-1 rounded-sm"><Lock size={8} /> Box Fechado</span>
                                 ) : numAg > 0 ? (
-                                    <span className="text-[9px] text-primary mt-0.5 block">{numAg} agend.</span>
-                                ) : null}
+                                    <span className="text-[9px] font-bold uppercase tracking-widest text-primary mt-2 block bg-primary/10 py-1 rounded-sm">{numAg} agend.</span>
+                                ) : <div className="h-6 mt-2" />}
                             </div>
                         );
                     })}
@@ -238,7 +244,7 @@ export default function AdminCalendario() {
                                     return (
                                         <div key={`${dk}-${slot}`} className="border-b border-l border-white/5 p-1 bg-red-500/5">
                                             <div className="h-full flex items-center justify-center">
-                                                <Lock size={10} className="text-red-400/30" />
+                                                <Lock size={12} className="text-red-400/20" />
                                             </div>
                                         </div>
                                     );
@@ -246,9 +252,9 @@ export default function AdminCalendario() {
 
                                 if (almoco) {
                                     return (
-                                        <div key={`${dk}-${slot}`} className="border-b border-l border-white/5 p-1 bg-zinc-800/50">
+                                        <div key={`${dk}-${slot}`} className="border-b border-l border-white/5 p-1 bg-[#111]">
                                             <div className="h-full flex items-center justify-center">
-                                                <span className="text-[8px] text-zinc-600">almoço</span>
+                                                <span className="text-[8px] font-bold uppercase tracking-widest text-zinc-700">almoço</span>
                                             </div>
                                         </div>
                                     );
@@ -260,14 +266,14 @@ export default function AdminCalendario() {
                                     const isPendente = ag.status === STATUS.PENDENTE;
 
                                     return (
-                                        <div key={`${dk}-${slot}`} className={`border-b border-l border-white/5 p-1 ${isPendente ? 'bg-yellow-500/10' : 'bg-primary/10'
-                                            } ${isHoje ? 'bg-opacity-20' : ''}`}>
-                                            <div className="p-1 h-full">
-                                                <span className="text-[9px] font-bold text-white block truncate">
+                                        <div key={`${dk}-${slot}`} className={`border-b border-l ${isPendente ? 'border-yellow-500/30 bg-yellow-500/10' : 'border-primary/30 bg-primary/10'
+                                            } ${isHoje ? 'bg-opacity-20' : ''} p-1 transition-all hover:brightness-110 cursor-pointer`}>
+                                            <div className="p-2 h-full flex flex-col justify-center">
+                                                <span className="text-[10px] font-bold text-white block truncate mb-0.5">
                                                     {nomeCliente}
                                                 </span>
-                                                <span className="text-[8px] text-zinc-400 block truncate">{ag.servicoNome}</span>
-                                                <span className={`text-[7px] font-bold uppercase ${sc?.cor || 'text-zinc-500'}`}>
+                                                <span className="text-[9px] font-modern text-zinc-400 block truncate mb-1">{ag.servicoNome}</span>
+                                                <span className={`text-[8px] font-bold uppercase tracking-widest mt-auto ${sc?.cor || 'text-zinc-500'}`}>
                                                     {sc?.label || ag.status}
                                                 </span>
                                             </div>
@@ -303,24 +309,29 @@ function DailyDetail({ dateKey, agendamentos, disponibilidade }) {
     const bloqueado = disponibilidade?.disponivel === false;
 
     return (
-        <div className="bg-zinc-900/40 border border-white/5 p-5">
-            <div className="flex items-center justify-between mb-4">
-                <h3 className="font-display font-bold text-sm uppercase tracking-wider flex items-center gap-2">
-                    <Eye size={16} className="text-primary" /> Detalhes do Dia — {formatDataCurta(dateKey)}
+        <div className="bg-black border border-white/5 p-6 md:p-8">
+            <div className="flex items-center justify-between mb-8 pb-4 border-b border-white/5">
+                <h3 className="font-display font-bold text-lg uppercase tracking-widest flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
+                        <CalendarDays size={14} className="text-primary" />
+                    </div>
+                    {formatDataCurta(dateKey)}
                 </h3>
                 {bloqueado && (
-                    <span className="flex items-center gap-1 text-[10px] font-bold text-red-400 bg-red-400/10 px-3 py-1">
-                        <Lock size={10} /> {disponibilidade?.motivo || 'Bloqueado'}
+                    <span className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-red-400 bg-red-500/10 px-4 py-2 border border-red-500/20">
+                        <Lock size={12} /> {disponibilidade?.motivo || 'Bloqueado'}
                     </span>
                 )}
             </div>
 
             {agendamentos.length === 0 ? (
-                <p className="text-zinc-600 font-modern text-sm py-4 text-center">
-                    {bloqueado ? 'Dia bloqueado — sem agendamentos.' : 'Nenhum agendamento para este dia.'}
-                </p>
+                <div className="py-12 text-center border border-white/5 bg-white/[0.02]">
+                    <p className="text-zinc-500 font-modern text-sm uppercase tracking-widest">
+                        {bloqueado ? 'Dia bloqueado — sem agendamentos.' : 'Nenhum agendamento para este dia.'}
+                    </p>
+                </div>
             ) : (
-                <div className="space-y-2">
+                <div className="grid gap-3">
                     {agendamentos
                         .sort((a, b) => a.faixaInicio.localeCompare(b.faixaInicio))
                         .map(ag => {
@@ -328,20 +339,24 @@ function DailyDetail({ dateKey, agendamentos, disponibilidade }) {
                             const sobrenomeCliente = sb ? (ag._clienteSobrenome || '') : (clientStore.getById(ag.clienteId)?.sobrenome || '');
                             const sc = STATUS_CONFIG[ag.status];
                             return (
-                                <div key={ag.id} className="flex items-center gap-3 p-3 bg-black/30 border border-white/5">
-                                    <span className="text-sm font-modern font-bold text-primary w-20 shrink-0">
-                                        {ag.faixaInicio} — {ag.faixaFim}
+                                <div key={ag.id} className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 md:p-5 bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-colors group">
+                                    <span className="text-lg font-display font-bold text-primary w-32 shrink-0 tabular-nums">
+                                        {ag.faixaInicio} <span className="text-zinc-600 font-normal mx-1">—</span> {ag.faixaFim}
                                     </span>
-                                    <div className="flex-1 min-w-0">
-                                        <span className="text-sm font-modern block truncate">
-                                            <User size={12} className="inline mr-1 text-zinc-500" />
-                                            {nomeCliente} {sobrenomeCliente}
-                                        </span>
-                                        <span className="text-[10px] text-zinc-500 flex items-center gap-1">
-                                            <Scissors size={10} /> {ag.servicoNome}
-                                        </span>
+                                    <div className="flex-1 min-w-0 flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-full bg-zinc-900 border border-white/10 flex items-center justify-center shrink-0 group-hover:border-primary/30 transition-colors">
+                                            <User size={16} className="text-zinc-500 group-hover:text-primary transition-colors" />
+                                        </div>
+                                        <div>
+                                            <span className="text-base font-bold tracking-wide block truncate mb-0.5">
+                                                {nomeCliente} {sobrenomeCliente}
+                                            </span>
+                                            <span className="text-xs font-modern text-zinc-500 flex items-center gap-1.5">
+                                                <Scissors size={12} className="text-zinc-600" /> {ag.servicoNome}
+                                            </span>
+                                        </div>
                                     </div>
-                                    <span className={`text-[9px] font-bold uppercase tracking-wider ${sc?.cor || 'text-zinc-500'} px-2 py-1 ${sc?.bg || 'bg-zinc-800'}`}>
+                                    <span className={`text-[10px] font-bold uppercase tracking-widest ${sc?.cor || 'text-zinc-500'} px-3 py-1.5 ${sc?.bg || 'bg-zinc-800'} mt-2 sm:mt-0 self-start sm:self-auto`}>
                                         {sc?.label || ag.status}
                                     </span>
                                 </div>

@@ -52,14 +52,17 @@ export default function LoginPage() {
                 {/* Card */}
                 <div className="bg-zinc-900/80 border border-white/10 p-8 md:p-10">
                     {/* Header */}
-                    <div className="mb-10">
-                        <h1 className="font-display font-bold text-2xl uppercase tracking-tight mb-2">Entrar</h1>
-                        <p className="text-zinc-500 font-modern text-sm">Acesse sua conta para gerenciar seus agendamentos.</p>
+                    <div className="mb-10 text-center">
+                        <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-primary/20 shadow-[0_0_30px_rgba(242,185,13,0.15)]">
+                            <span className="font-display font-bold text-2xl text-primary perspective-text tracking-tighter">PX</span>
+                        </div>
+                        <h1 className="font-display font-bold text-3xl uppercase tracking-tighter mb-2 perspective-text">Entrar</h1>
+                        <p className="text-zinc-500 font-modern text-[11px] uppercase tracking-widest mt-2 block">Acesse sua conta para gerenciar seus agendamentos.</p>
                     </div>
 
                     {/* Error */}
                     {erro && (
-                        <div className="mb-6 p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-modern">
+                        <div className="mb-6 p-4 bg-red-500/5 border-l-2 border-red-500 text-red-400 text-sm font-modern">
                             {erro}
                         </div>
                     )}
@@ -67,34 +70,34 @@ export default function LoginPage() {
                     {/* Form */}
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div>
-                            <label className="text-[10px] font-bold uppercase tracking-[0.5em] text-zinc-500 mb-2 block">E-mail</label>
+                            <label className="text-[9px] font-bold uppercase tracking-[0.5em] text-zinc-500 mb-2 block">E-mail</label>
                             <input
                                 type="email"
                                 name="email"
                                 value={form.email}
                                 onChange={handleChange}
-                                className="w-full bg-black/50 border border-white/10 px-4 py-3 text-white font-modern focus:border-primary focus:outline-none transition-colors"
+                                className="w-full bg-transparent border-b border-white/20 px-0 py-3 text-white font-modern focus:border-primary focus:outline-none transition-colors placeholder:text-zinc-700"
                                 placeholder="seu@email.com"
                             />
                         </div>
 
                         <div>
-                            <label className="text-[10px] font-bold uppercase tracking-[0.5em] text-zinc-500 mb-2 block">Senha</label>
+                            <label className="text-[9px] font-bold uppercase tracking-[0.5em] text-zinc-500 mb-2 block">Senha</label>
                             <div className="relative">
                                 <input
                                     type={showSenha ? 'text' : 'password'}
                                     name="senha"
                                     value={form.senha}
                                     onChange={handleChange}
-                                    className="w-full bg-black/50 border border-white/10 px-4 py-3 text-white font-modern focus:border-primary focus:outline-none transition-colors pr-12"
+                                    className="w-full bg-transparent border-b border-white/20 px-0 py-3 text-white font-modern focus:border-primary focus:outline-none transition-colors pr-12 placeholder:text-zinc-700"
                                     placeholder="••••••••"
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowSenha(!showSenha)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-primary transition-colors"
+                                    className="absolute right-0 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-primary transition-colors"
                                 >
-                                    {showSenha ? <EyeOff size={18} /> : <Eye size={18} />}
+                                    {showSenha ? <EyeOff size={16} /> : <Eye size={16} />}
                                 </button>
                             </div>
                         </div>
