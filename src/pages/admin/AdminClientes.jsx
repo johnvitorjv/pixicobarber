@@ -176,51 +176,184 @@ export default function AdminClientes() {
                 </div>
             )}
 
-            {/* Modal Detalhe */}
+            {/* Modal Detalhe — Painel Completo do Cliente */}
             {modal?.tipo === 'detalhe' && (() => {
-                const c = clientStore.getById(modal.cliente.id) || modal.cliente;
-                const ags = appointmentStore.getByClient(c.id);
+                const c = sbConfigured ? (sbClients.find(cl => cl.id === modal.cliente.id) || modal.cliente) : (clientStore.getById(modal.cliente.id) || modal.cliente);
+                const clientApps = sbConfigured ? sbApps.filter(a => a.clienteId === c.id) : appointmentStore.getByClient(c.id);
+                const totalAgs = clientApps.length;
+                const concluidosCount = clientApps.filter(a => a.status === 'concluido' || a.status === STATUS.CONCLUIDO).length;
+                const faltasCount = clientApps.filter(a => a.status === 'ausente' || a.status === STATUS.NAO_COMPARECEU).length;
+                const canceladosCount = clientApps.filter(a => a.status === 'cancelado_cliente' || a.status === STATUS.CANCELADO_CLIENTE).length;
+                const rejeitadosCount = clientApps.filter(a => a.status === 'rejeitado' || a.status === STATUS.REJEITADO).length;
+                const valorTotal = clientApps.filter(a => a.status === 'concluido' || a.status === STATUS.CONCLUIDO).reduce((s, a) => s + (a.servicoPreco || 0), 0);
+                const ticketMedio = concluidosCount > 0 ? valorTotal / concluidosCount : 0;
+
+                // Último atendimento concluído
+                const ultimoConcluido = clientApps
+                    .filter(a => a.status === 'concluido' || a.status === STATUS.CONCLUIDO)
+                    .sort((a, b) => (b.data || '').localeCompare(a.data || ''))[0];
+
+                // Próximo agendamento (pendente ou confirmado)
+                const proximo = clientApps
+                    .filter(a => a.status === 'pendente' || a.status === 'confirmado' || a.status === STATUS.PENDENTE || a.status === STATUS.APROVADO)
+                    .sort((a, b) => (a.data || '').localeCompare(b.data || ''))[0];
+
+                // Serviços mais usados
+                const servicoCount = {};
+                clientApps.filter(a => a.status === 'concluido' || a.status === STATUS.CONCLUIDO).forEach(a => {
+                    const nome = a.servicoNome || 'Serviço';
+                    servicoCount[nome] = (servicoCount[nome] || 0) + 1;
+                });
+                const topServicos = Object.entries(servicoCount).sort((a, b) => b[1] - a[1]).slice(0, 3);
+
+                // Score de presença
+                const score = totalAgs > 0 ? Math.round(((concluidosCount) / Math.max(1, concluidosCount + faltasCount)) * 100) : 100;
+
                 return (
                     <ModalOverlay onClose={() => setModal(null)}>
-                        <h3 className="font-display font-bold text-lg uppercase tracking-tight mb-4 flex items-center gap-2">
-                            <User size={20} className="text-primary" /> {c.nome} {c.sobrenome}
-                        </h3>
-                        <div className="space-y-2 mb-4 text-sm font-modern">
-                            <div className="flex justify-between border-b border-white/5 py-1"><span className="text-zinc-500">E-mail</span><span>{c.email}</span></div>
-                            <div className="flex justify-between border-b border-white/5 py-1"><span className="text-zinc-500">WhatsApp</span><span>{c.whatsapp}</span></div>
-                            <div className="flex justify-between border-b border-white/5 py-1"><span className="text-zinc-500">Cadastro</span><span>{formatData(c.criadoEm)}</span></div>
-                            <div className="flex justify-between border-b border-white/5 py-1"><span className="text-zinc-500">Score</span><span>{c.scorePresenca || 100}</span></div>
-                            <div className="flex justify-between border-b border-white/5 py-1"><span className="text-zinc-500">Agendamentos</span><span>{ags.length}</span></div>
-                        </div>
-
-                        <div className="mb-4">
-                            <label className="text-[10px] font-bold uppercase tracking-[0.4em] text-zinc-500 block mb-1">Apelido interno</label>
-                            <input type="text" value={editApelido} onChange={e => setEditApelido(e.target.value)} className="w-full bg-black/50 border border-white/10 px-3 py-2 text-sm text-white font-modern focus:border-primary focus:outline-none" placeholder="Ex: João do Corte" />
-                        </div>
-                        <div className="mb-4">
-                            <label className="text-[10px] font-bold uppercase tracking-[0.4em] text-zinc-500 block mb-1">Observações privadas</label>
-                            <textarea value={editObs} onChange={e => setEditObs(e.target.value)} className="w-full bg-black/50 border border-white/10 px-3 py-2 text-sm text-white font-modern focus:border-primary focus:outline-none h-20 resize-none" />
-                        </div>
-                        <div className="mb-4">
-                            <label className="text-[10px] font-bold uppercase tracking-[0.4em] text-zinc-500 block mb-1">Tags</label>
-                            <div className="flex gap-1 flex-wrap mb-2">
-                                {(c.tags || []).map(t => (
-                                    <span key={t} className="text-[9px] bg-primary/10 text-primary px-2 py-1 font-bold uppercase tracking-wider flex items-center gap-1">
-                                        {t} <button onClick={() => removeTag(c.id, t)} className="text-primary/50 hover:text-primary"><X size={10} /></button>
+                        <div className="max-h-[85vh] overflow-y-auto -m-6 md:-m-8 p-6 md:p-8">
+                            {/* ═══ BLOCO HERO — Foto + Nome ═══ */}
+                            <div className="flex flex-col items-center text-center mb-6 pt-2">
+                                {/* Foto ampliada */}
+                                <div className="relative mb-4">
+                                    {c.fotoUrl ? (
+                                        <img src={c.fotoUrl} alt={c.nome} className="w-24 h-24 rounded-full object-cover border-2 border-primary/30 shadow-lg shadow-primary/10" />
+                                    ) : (
+                                        <div className="w-24 h-24 rounded-full bg-zinc-800 border-2 border-white/10 flex items-center justify-center">
+                                            <span className="font-display font-bold text-2xl text-zinc-500">{(c.nome?.[0] || '')}{(c.sobrenome?.[0] || '')}</span>
+                                        </div>
+                                    )}
+                                    {/* Badge de status */}
+                                    {c.favorito && (
+                                        <span className="absolute -bottom-1 -right-1 bg-primary text-black p-1 rounded-full"><Star size={12} className="fill-black" /></span>
+                                    )}
+                                    {c.blacklist && (
+                                        <span className="absolute -bottom-1 -right-1 bg-red-500 text-white p-1 rounded-full"><Ban size={12} /></span>
+                                    )}
+                                </div>
+                                <h3 className="font-display font-bold text-xl uppercase tracking-tight">{c.nome} {c.sobrenome}</h3>
+                                {c.apelido && <span className="text-zinc-500 text-xs font-modern italic mt-0.5">"{c.apelido}"</span>}
+                                <div className="flex items-center gap-2 mt-2">
+                                    <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-1 ${score >= 80 ? 'bg-emerald-400/10 text-emerald-400' : score >= 50 ? 'bg-yellow-400/10 text-yellow-400' : 'bg-red-400/10 text-red-400'}`}>
+                                        Score: {score}%
                                     </span>
-                                ))}
+                                    {c.favorito && <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-1 bg-primary/10 text-primary">⭐ Favorito</span>}
+                                    {c.blacklist && <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-1 bg-red-400/10 text-red-400">🚫 Blacklist</span>}
+                                </div>
                             </div>
-                            <div className="flex gap-2">
-                                <input type="text" value={editTag} onChange={e => setEditTag(e.target.value)} onKeyDown={e => e.key === 'Enter' && addTag(c.id)} placeholder="Nova tag..." className="flex-1 bg-black/50 border border-white/10 px-3 py-1.5 text-sm text-white font-modern focus:border-primary focus:outline-none" />
-                                <button onClick={() => addTag(c.id)} className="bg-primary/10 text-primary px-3 py-1.5 text-xs font-bold"><Plus size={14} /></button>
-                            </div>
-                        </div>
 
-                        <div className="flex gap-3 mt-6">
-                            <button onClick={salvarEdicao} className="flex-1 bg-primary text-black py-3 font-display font-bold uppercase text-xs tracking-[0.3em]">Salvar</button>
-                            <button onClick={() => toggleBlacklist(c.id, !c.blacklist)} className={`px-6 py-3 font-display font-bold uppercase text-xs tracking-[0.3em] ${c.blacklist ? 'bg-zinc-700 text-white' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
-                                {c.blacklist ? 'Remover Blacklist' : 'Blacklist'}
-                            </button>
+                            {/* ═══ BLOCO CONTATO ═══ */}
+                            <div className="bg-black/30 border border-white/5 p-4 mb-4">
+                                <h4 className="text-[9px] font-bold uppercase tracking-[0.5em] text-zinc-500 mb-3">Contato</h4>
+                                <div className="space-y-2 text-sm font-modern">
+                                    <div className="flex justify-between"><span className="text-zinc-500">WhatsApp</span><span>{c.whatsapp || '—'}</span></div>
+                                    <div className="flex justify-between"><span className="text-zinc-500">E-mail</span><span>{c.email || '—'}</span></div>
+                                    <div className="flex justify-between"><span className="text-zinc-500">Cadastro</span><span>{formatData(c.criadoEm)}</span></div>
+                                    {c.nascimento && <div className="flex justify-between"><span className="text-zinc-500">Nascimento</span><span>{formatData(c.nascimento)}</span></div>}
+                                </div>
+                            </div>
+
+                            {/* ═══ BLOCO HISTÓRICO ═══ */}
+                            <div className="bg-black/30 border border-white/5 p-4 mb-4">
+                                <h4 className="text-[9px] font-bold uppercase tracking-[0.5em] text-zinc-500 mb-3">Histórico</h4>
+                                <div className="grid grid-cols-2 gap-3 mb-3">
+                                    <div className="bg-zinc-800/50 p-3 text-center">
+                                        <span className="text-lg font-display font-bold text-white block">{totalAgs}</span>
+                                        <span className="text-[8px] font-bold uppercase tracking-wider text-zinc-500">Total</span>
+                                    </div>
+                                    <div className="bg-zinc-800/50 p-3 text-center">
+                                        <span className="text-lg font-display font-bold text-emerald-400 block">{concluidosCount}</span>
+                                        <span className="text-[8px] font-bold uppercase tracking-wider text-zinc-500">Concluídos</span>
+                                    </div>
+                                    <div className="bg-zinc-800/50 p-3 text-center">
+                                        <span className="text-lg font-display font-bold text-orange-400 block">{faltasCount}</span>
+                                        <span className="text-[8px] font-bold uppercase tracking-wider text-zinc-500">Faltas</span>
+                                    </div>
+                                    <div className="bg-zinc-800/50 p-3 text-center">
+                                        <span className="text-lg font-display font-bold text-zinc-400 block">{canceladosCount}</span>
+                                        <span className="text-[8px] font-bold uppercase tracking-wider text-zinc-500">Cancelados</span>
+                                    </div>
+                                </div>
+                                <div className="space-y-2 text-sm font-modern">
+                                    <div className="flex justify-between">
+                                        <span className="text-zinc-500">Último atendimento</span>
+                                        <span>{ultimoConcluido ? `${formatData(ultimoConcluido.data)} — ${ultimoConcluido.servicoNome}` : '—'}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-zinc-500">Próximo agendamento</span>
+                                        <span className={proximo ? 'text-primary' : ''}>{proximo ? `${formatData(proximo.data)} — ${proximo.servicoNome}` : '—'}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* ═══ BLOCO FINANCEIRO ═══ */}
+                            <div className="bg-black/30 border border-white/5 p-4 mb-4">
+                                <h4 className="text-[9px] font-bold uppercase tracking-[0.5em] text-zinc-500 mb-3">Financeiro</h4>
+                                <div className="grid grid-cols-2 gap-3 mb-3">
+                                    <div className="bg-zinc-800/50 p-3 text-center">
+                                        <span className="text-lg font-display font-bold text-primary block">R$ {valorTotal.toFixed(0)}</span>
+                                        <span className="text-[8px] font-bold uppercase tracking-wider text-zinc-500">Valor Total</span>
+                                    </div>
+                                    <div className="bg-zinc-800/50 p-3 text-center">
+                                        <span className="text-lg font-display font-bold text-blue-400 block">R$ {ticketMedio.toFixed(0)}</span>
+                                        <span className="text-[8px] font-bold uppercase tracking-wider text-zinc-500">Ticket Médio</span>
+                                    </div>
+                                </div>
+                                {topServicos.length > 0 && (
+                                    <div>
+                                        <span className="text-[8px] font-bold uppercase tracking-wider text-zinc-600 block mb-1">Serviços favoritos</span>
+                                        <div className="flex flex-wrap gap-1">
+                                            {topServicos.map(([nome, qtd]) => (
+                                                <span key={nome} className="text-[9px] bg-primary/10 text-primary px-2 py-1 font-bold">{nome} ({qtd}x)</span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* ═══ BLOCO ADMIN ═══ */}
+                            <div className="bg-black/30 border border-white/5 p-4 mb-4">
+                                <h4 className="text-[9px] font-bold uppercase tracking-[0.5em] text-zinc-500 mb-3">Notas do Admin</h4>
+                                <div className="mb-3">
+                                    <label className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-600 block mb-1">Apelido interno</label>
+                                    <input type="text" value={editApelido} onChange={e => setEditApelido(e.target.value)} className="w-full bg-black/50 border border-white/10 px-3 py-2 text-sm text-white font-modern focus:border-primary focus:outline-none" placeholder="Ex: João do Corte" />
+                                </div>
+                                <div className="mb-3">
+                                    <label className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-600 block mb-1">Observações privadas</label>
+                                    <textarea value={editObs} onChange={e => setEditObs(e.target.value)} className="w-full bg-black/50 border border-white/10 px-3 py-2 text-sm text-white font-modern focus:border-primary focus:outline-none h-16 resize-none" />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-600 block mb-1">Tags</label>
+                                    <div className="flex gap-1 flex-wrap mb-2">
+                                        {(c.tags || []).map(t => (
+                                            <span key={t} className="text-[9px] bg-primary/10 text-primary px-2 py-1 font-bold uppercase tracking-wider flex items-center gap-1">
+                                                {t} <button onClick={() => removeTag(c.id, t)} className="text-primary/50 hover:text-primary"><X size={10} /></button>
+                                            </span>
+                                        ))}
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <input type="text" value={editTag} onChange={e => setEditTag(e.target.value)} onKeyDown={e => e.key === 'Enter' && addTag(c.id)} placeholder="Nova tag..." className="flex-1 bg-black/50 border border-white/10 px-3 py-1.5 text-sm text-white font-modern focus:border-primary focus:outline-none" />
+                                        <button onClick={() => addTag(c.id)} className="bg-primary/10 text-primary px-3 py-1.5 text-xs font-bold"><Plus size={14} /></button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* ═══ AÇÕES ═══ */}
+                            <div className="flex gap-3">
+                                <button onClick={salvarEdicao} className="flex-1 bg-primary text-black py-3 font-display font-bold uppercase text-xs tracking-[0.3em]">Salvar</button>
+                                <button onClick={() => toggleFav(c.id)} className={`px-4 py-3 border text-xs font-bold uppercase tracking-wider ${c.favorito ? 'border-primary text-primary bg-primary/5' : 'border-white/10 text-zinc-500 hover:text-primary'}`}>
+                                    <Star size={14} className={c.favorito ? 'fill-primary' : ''} />
+                                </button>
+                                <button onClick={() => toggleBlacklist(c.id, !c.blacklist)} className={`px-4 py-3 font-display font-bold uppercase text-xs tracking-[0.3em] ${c.blacklist ? 'bg-zinc-700 text-white' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+                                    {c.blacklist ? 'Remover BL' : 'Blacklist'}
+                                </button>
+                            </div>
+                            {c.whatsapp && (
+                                <a href={gerarLinkWhatsAppCliente(c.whatsapp, 'Olá! Aqui é da Pixico Barber.')} target="_blank" rel="noopener noreferrer"
+                                    className="mt-3 w-full flex items-center justify-center gap-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 py-2.5 font-display font-bold uppercase text-xs tracking-[0.3em]">
+                                    <MessageCircle size={14} /> WhatsApp
+                                </a>
+                            )}
                         </div>
                     </ModalOverlay>
                 );
