@@ -1,12 +1,9 @@
 import { useState } from 'react';
-import appointmentStore from '../../stores/appointmentStore';
-import clientStore from '../../stores/clientStore';
-import financialStore from '../../stores/financialStore';
-import notificationStore from '../../stores/notificationStore';
-import { STATUS, STATUS_CONFIG, MOTIVOS_REJEICAO, NOTIF_TIPOS, NOTIF_NIVEIS, FORMAS_PAGAMENTO } from '../../data/models';
+import { useAction } from '../../hooks/useAction';
+import DataState from '../../components/DataState';
+import { STATUS, STATUS_CONFIG, MOTIVOS_REJEICAO, FORMAS_PAGAMENTO } from '../../data/models';
 import { TEMPLATES, gerarLinkWhatsAppCliente } from '../../data/whatsappTemplates';
 import { useStoreSync } from '../../hooks/useStore';
-import { isSupabaseConfigured } from '../../lib/supabase';
 import { useSupabaseAppointments, updateAppointmentSupabase } from '../../hooks/useSupabase';
 import { Avatar } from '../../components/PhotoUpload';
 import {
@@ -15,10 +12,10 @@ import {
 } from 'lucide-react';
 
 function formatData(d) { if (!d) return ''; const [y, m, dd] = d.split('-'); return `${dd}/${m}/${y}`; }
-function formatPreco(v) { return `R$ ${Number(v || 0).toFixed(0)}`; }
 
 export default function AdminAgendamentos() {
-    const storeTick = useStoreSync();
+    useStoreSync();
+    const action = useAction();
     const [filtroStatus, setFiltroStatus] = useState('todos');
     const [busca, setBusca] = useState('');
     const [filtroData, setFiltroData] = useState('');
@@ -38,49 +35,35 @@ export default function AdminAgendamentos() {
     const [formaPagamento, setFormaPagamento] = useState('');
 
     // Supabase data
-    const supabase = isSupabaseConfigured();
-    const { appointments: sbAppointments, loading: sbLoading, refetch: refetchAppointments } = useSupabaseAppointments();
+    const { appointments: sbAppointments, loading: sbLoading, error: queryError, refetch: refetchAppointments } = useSupabaseAppointments();
 
-    // Leitura reativa — Supabase ou localStorage
+    // Dados persistidos exclusivamente pelo Supabase.
     const agendamentos = (() => {
-        let all = supabase ? sbAppointments : appointmentStore.getAll();
+        let all = sbAppointments;
         if (filtroStatus !== 'todos') all = all.filter(a => a.status === filtroStatus);
         if (filtroData) all = all.filter(a => a.data === filtroData);
         if (busca) {
             const q = busca.toLowerCase();
             all = all.filter(a => {
-                if (supabase) {
-                    return (
+                return (
                         a.servicoNome?.toLowerCase().includes(q) ||
                         a._clienteNome?.toLowerCase().includes(q) ||
                         a._clienteSobrenome?.toLowerCase().includes(q) ||
                         a._clienteWhatsapp?.includes(q)
-                    );
-                }
-                const cliente = clientStore.getById(a.clienteId);
-                return (
-                    a.servicoNome?.toLowerCase().includes(q) ||
-                    cliente?.nome?.toLowerCase().includes(q) ||
-                    cliente?.sobrenome?.toLowerCase().includes(q) ||
-                    cliente?.apelido?.toLowerCase().includes(q) ||
-                    cliente?.whatsapp?.includes(q)
                 );
             });
         }
         return all;
     })();
 
-    // Helper: obter dados do cliente (Supabase inline ou localStorage)
+    // Dados persistidos exclusivamente pelo Supabase.
     function getCliente(ag) {
-        if (supabase) {
-            return {
+        return {
                 nome: ag._clienteNome || 'Cliente',
                 sobrenome: ag._clienteSobrenome || '',
                 whatsapp: ag._clienteWhatsapp || '',
                 fotoUrl: ag._clienteFoto || '',
-            };
-        }
-        return clientStore.getById(ag.clienteId) || { nome: 'Cliente', sobrenome: '', whatsapp: '' };
+        };
     }
 
     function abrirAprovar(ag) {
@@ -91,16 +74,9 @@ export default function AdminAgendamentos() {
     }
 
     async function confirmarAprovar() {
-        const { ag } = modal;
-        if (supabase) {
-            try {
-                await updateAppointmentSupabase(ag.id, { status: 'confirmado' });
-                await refetchAppointments();
-            } catch (err) { console.error('Erro ao aprovar:', err); }
-        } else {
-            appointmentStore.aprovar(ag.id, '');
-        }
-        setModal(null);
+        await action.execute(async () => {
+            await updateAppointmentSupabase(modal.ag.id, { status: 'confirmado' }); await refetchAppointments(); setModal(null);
+        });
     }
 
     function abrirRejeitar(ag) {
@@ -117,80 +93,42 @@ export default function AdminAgendamentos() {
     }
 
     async function confirmarRejeitar() {
-        const { ag } = modal;
-        const novoStatus = sugerirNovo ? 'aguardando_cliente' : 'rejeitado';
-        if (supabase) {
-            try {
-                const updates = { status: novoStatus };
-                if (sugerirNovo && novaData) updates.data = novaData;
-                if (sugerirNovo && novaFaixaInicio) updates.faixaInicio = novaFaixaInicio;
-                if (sugerirNovo && novaFaixaFim) updates.faixaFim = novaFaixaFim;
-                await updateAppointmentSupabase(ag.id, updates);
-                await refetchAppointments();
-            } catch (err) { console.error('Erro ao rejeitar:', err); }
-        } else {
-            const motivoFinal = motivosSelecionados.map(id => MOTIVOS_REJEICAO.find(m => m.id === id)?.label).filter(Boolean).join('; ') + (motivoTexto ? ` — ${motivoTexto}` : '');
-            appointmentStore.rejeitar(ag.id, {
-                motivosRejeicaoIds: motivosSelecionados,
-                motivoRejeicao: motivoFinal,
-                sugestaoNovaData: sugerirNovo ? novaData : null,
-                sugestaoNovaFaixa: sugerirNovo ? `${novaFaixaInicio} às ${novaFaixaFim}` : null,
-            });
-        }
-        setModal(null);
+        const motivo = motivosSelecionados.map(id => MOTIVOS_REJEICAO.find(m => m.id === id)?.label).filter(Boolean).join('; ') + (motivoTexto ? ' — ' + motivoTexto : '');
+        await action.execute(async () => {
+            const updates = { status: sugerirNovo ? 'aguardando_cliente' : 'rejeitado', motivoRejeicao: motivo };
+            if (sugerirNovo) { updates.sugestaoNovaData = novaData; updates.sugestaoInicio = novaFaixaInicio; updates.sugestaoFim = novaFaixaFim; }
+            await updateAppointmentSupabase(modal.ag.id, updates); await refetchAppointments(); setModal(null);
+        });
     }
 
     function abrirConcluir(ag) {
-        setValorCobrado(String(ag.valorCobrado || ''));
+        setValorCobrado(String(ag.valorCobrado ?? ag.servicoPreco ?? ''));
         setFormaPagamento(ag.formaPagamento || '');
         setModal({ tipo: 'concluir', ag });
     }
 
     async function confirmarConcluir() {
-        const { ag } = modal;
         const valor = Number(valorCobrado);
-        if (supabase) {
-            try {
-                await updateAppointmentSupabase(ag.id, { status: 'concluido' });
-                await refetchAppointments();
-            } catch (err) { console.error('Erro ao concluir:', err); }
-        } else {
-            appointmentStore.concluir(ag.id, valor, formaPagamento);
-            financialStore.registrarEntradaServico({ ...ag, valorCobrado: valor, formaPagamento });
-            clientStore.updateScorePresenca(ag.clienteId, 5);
-        }
-        setModal(null);
+        await action.execute(async () => {
+            if (!Number.isFinite(valor) || valor < 0 || valorCobrado === '' || !formaPagamento) throw new Error('Informe cobrança e pagamento.');
+            await updateAppointmentSupabase(modal.ag.id, { status: 'concluido', valorCobrado: valor, formaPagamento });
+            await refetchAppointments(); setModal(null);
+        });
     }
-
     async function handleNaoCompareceu(ag) {
-        if (supabase) {
-            try {
-                await updateAppointmentSupabase(ag.id, { status: 'ausente' });
-                await refetchAppointments();
-            } catch (err) { console.error('Erro:', err); }
-        } else {
-            appointmentStore.marcarNaoCompareceu(ag.id);
-            clientStore.updateScorePresenca(ag.clienteId, -15);
-        }
+        await action.execute(async () => { await updateAppointmentSupabase(ag.id, { status: 'ausente' }); await refetchAppointments(); });
     }
-
     async function handleRemarcar(ag) {
-        if (ag.sugestaoNovaData) {
-            const [fi, ff] = (ag.sugestaoNovaFaixa || '').split(' às ');
-            if (supabase) {
-                try {
-                    await updateAppointmentSupabase(ag.id, {
-                        status: 'confirmado',
-                        data: ag.sugestaoNovaData,
-                        faixaInicio: fi || ag.faixaInicio,
-                        faixaFim: ff || ag.faixaFim,
-                    });
-                    await refetchAppointments();
-                } catch (err) { console.error('Erro:', err); }
-            } else {
-                appointmentStore.remarcar(ag.id, ag.sugestaoNovaData, fi || ag.faixaInicio, ff || ag.faixaFim);
-            }
-        }
+        if (!ag.sugestaoNovaData) return;
+        const [fi, ff] = ag.sugestaoNovaFaixa.split(' às ');
+        await action.execute(async () => {
+            await updateAppointmentSupabase(ag.id, { status: 'confirmado', data: ag.sugestaoNovaData,
+                faixaInicio: fi, faixaFim: ff, sugestaoNovaData: null, sugestaoInicio: null, sugestaoFim: null });
+            await refetchAppointments();
+        });
+    }
+    async function cancelarAdmin(ag) {
+        await action.execute(async () => { await updateAppointmentSupabase(ag.id, { status: 'cancelado_admin' }); await refetchAppointments(); });
     }
 
     const STATUS_FILTER_OPTIONS = [
@@ -200,10 +138,11 @@ export default function AdminAgendamentos() {
 
     return (
         <div className="p-6 md:p-10 max-w-[1600px] mx-auto">
+            <DataState loading={sbLoading || action.busy} error={queryError || action.error} retry={refetchAppointments} />
             <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
                     <span className="text-[10px] font-bold uppercase tracking-[1em] text-primary mb-3 block">Gestão</span>
-                    <h1 className="font-display font-bold text-3xl md:text-5xl uppercase tracking-tighter">Agendamentos</h1>
+                    <h1 className="font-display font-bold text-2xl sm:text-3xl md:text-5xl uppercase tracking-tighter">Agendamentos</h1>
                 </div>
             </div>
 
@@ -219,7 +158,7 @@ export default function AdminAgendamentos() {
                         className="w-full bg-transparent border-b border-white/20 pl-8 pr-4 py-3 text-sm text-white font-modern focus:border-primary focus:outline-none placeholder:text-zinc-700 transition-colors"
                     />
                 </div>
-                <div className="flex gap-4">
+                <div className="flex flex-wrap gap-4">
                     <input
                         type="date"
                         value={filtroData}
@@ -265,7 +204,7 @@ export default function AdminAgendamentos() {
                                 return (
                                     <tr key={ag.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors group">
                                         <td className="py-4 px-6">
-                                            <div className="flex items-center gap-4">
+                                            <div className="flex flex-wrap items-center gap-4">
                                                 <Avatar src={cliente?.fotoUrl} initials={`${cliente?.nome?.[0] || ''}${cliente?.sobrenome?.[0] || ''}`} size="sm" className="ring-1 ring-primary/20 grayscale group-hover:grayscale-0 transition-all duration-500" />
                                                 <div className="flex flex-col">
                                                     <div className="flex items-center gap-2">
@@ -288,7 +227,8 @@ export default function AdminAgendamentos() {
                                             </span>
                                         </td>
                                         <td className="py-4 px-6">
-                                            <div className="flex items-center gap-2 flex-wrap opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                            <div className="flex items-center gap-2 flex-wrap opacity-100 transition-opacity duration-300">
+                                                {['pendente','confirmado','remarcado','aguardando_cliente'].includes(ag.status) && <button disabled={action.busy} title="Cancelar agendamento" onClick={() => cancelarAdmin(ag)} className="text-red-400 p-2"><Ban size={14} /></button>}
                                                 {ag.status === STATUS.PENDENTE && (
                                                     <>
                                                         <button onClick={() => abrirAprovar(ag)} className="px-2 py-1 bg-green-500/10 text-green-400 text-[10px] font-bold uppercase tracking-wider hover:bg-green-500/20 transition-colors">Aprovar</button>
@@ -298,7 +238,7 @@ export default function AdminAgendamentos() {
                                                 {ag.status === STATUS.APROVADO && (
                                                     <>
                                                         <button onClick={() => abrirConcluir(ag)} className="px-2 py-1 bg-emerald-500/10 text-emerald-400 text-[10px] font-bold uppercase tracking-wider hover:bg-emerald-500/20 transition-colors">Concluir</button>
-                                                        <button onClick={() => handleNaoCompareceu(ag)} className="px-2 py-1 bg-orange-500/10 text-orange-400 text-[10px] font-bold uppercase tracking-wider hover:bg-orange-500/20 transition-colors">Faltou</button>
+                                                        <button disabled={action.busy} onClick={() => handleNaoCompareceu(ag)} className="px-2 py-1 bg-orange-500/10 text-orange-400 text-[10px] font-bold uppercase tracking-wider hover:bg-orange-500/20 transition-colors">Faltou</button>
                                                     </>
                                                 )}
                                                 {ag.status === STATUS.AGUARDANDO_CLIENTE && ag.sugestaoNovaData && (
@@ -326,7 +266,7 @@ export default function AdminAgendamentos() {
 
             {/* ── MODAL: Aprovar ── */}
             {modal?.tipo === 'aprovar' && (
-                <ModalOverlay onClose={() => setModal(null)}>
+                <ModalOverlay onClose={() => setModal(null)}><DataState error={action.error} loading={action.busy} />
                     <h3 className="font-display font-bold text-2xl uppercase tracking-tighter mb-8 flex items-center gap-3">
                         <CheckCircle size={24} className="text-green-400" /> Aprovar Agendamento
                     </h3>
@@ -346,19 +286,19 @@ export default function AdminAgendamentos() {
                             href={gerarLinkWhatsAppCliente(getCliente(modal.ag)?.whatsapp || '', mensagemWpp)}
                             target="_blank"
                             rel="noopener noreferrer"
-                            onClick={() => appointmentStore.marcarWhatsappEnviado(modal.ag.id)}
+
                             className="flex-1 bg-[#25D366]/10 border border-[#25D366]/20 text-[#25D366] px-6 py-4 font-display font-bold uppercase text-[10px] tracking-[0.3em] flex items-center justify-center gap-3 hover:bg-[#25D366] hover:text-black transition-all"
                         >
                             <MessageCircle size={18} /> WhatsApp
                         </a>
-                        <button onClick={confirmarAprovar} className="flex-1 bg-green-500 text-black py-4 font-display font-bold uppercase text-[10px] tracking-[0.3em] hover:bg-green-400 transition-colors">Confirmar Aprovação</button>
+                        <button disabled={action.busy} onClick={confirmarAprovar} className="flex-1 bg-green-500 text-black py-4 font-display font-bold uppercase text-[10px] tracking-[0.3em] hover:bg-green-400 transition-colors">Confirmar Aprovação</button>
                     </div>
                 </ModalOverlay>
             )}
 
             {/* ── MODAL: Rejeitar ── */}
             {modal?.tipo === 'rejeitar' && (
-                <ModalOverlay onClose={() => setModal(null)}>
+                <ModalOverlay onClose={() => setModal(null)}><DataState error={action.error} loading={action.busy} />
                     <h3 className="font-display font-bold text-2xl uppercase tracking-tighter mb-8 flex items-center gap-3">
                         <XCircle size={24} className="text-red-400" /> Rejeitar Agendamento
                     </h3>
@@ -409,7 +349,7 @@ export default function AdminAgendamentos() {
                         </div>
                     )}
                     <div className="flex gap-3">
-                        <button onClick={confirmarRejeitar} className="flex-1 bg-red-500 text-white py-3 font-display font-bold uppercase text-xs tracking-[0.3em] hover:bg-red-400 transition-colors">
+                        <button disabled={action.busy} onClick={confirmarRejeitar} className="flex-1 bg-red-500 text-white py-3 font-display font-bold uppercase text-xs tracking-[0.3em] hover:bg-red-400 transition-colors">
                             {sugerirNovo ? 'Enviar Proposta' : 'Confirmar Rejeição'}
                         </button>
                         <a
@@ -426,7 +366,7 @@ export default function AdminAgendamentos() {
 
             {/* ── MODAL: Concluir ── */}
             {modal?.tipo === 'concluir' && (
-                <ModalOverlay onClose={() => setModal(null)}>
+                <ModalOverlay onClose={() => setModal(null)}><DataState error={action.error} loading={action.busy} />
                     <h3 className="font-display font-bold text-2xl uppercase tracking-tighter mb-8 flex items-center gap-3">
                         <div className="w-10 h-10 bg-emerald-500/10 rounded-full flex items-center justify-center border border-emerald-500/20">
                             <DollarSign size={20} className="text-emerald-400" />
@@ -442,7 +382,7 @@ export default function AdminAgendamentos() {
                             <label className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 block mb-2">Valor Cobrado</label>
                             <input
                                 type="number"
-                                value={valorCobrado}
+                                min="0" step="0.01" value={valorCobrado}
                                 onChange={e => setValorCobrado(e.target.value)}
                                 className="w-full bg-transparent border-b border-white/20 py-3 text-lg text-white font-modern focus:border-emerald-400 focus:outline-none transition-colors placeholder:text-zinc-700 tabular-nums"
                             />
@@ -461,7 +401,7 @@ export default function AdminAgendamentos() {
                     </div>
                     <button
                         onClick={confirmarConcluir}
-                        disabled={!valorCobrado || !formaPagamento}
+                        disabled={action.busy || valorCobrado === '' || !formaPagamento}
                         className="w-full mt-10 bg-emerald-500 text-black py-4 font-display font-bold uppercase text-[10px] tracking-[0.3em] hover:bg-emerald-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                     >
                         Registrar Conclusão

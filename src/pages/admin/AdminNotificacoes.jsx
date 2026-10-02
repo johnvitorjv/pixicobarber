@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useAction } from '../../hooks/useAction';
+import DataState from '../../components/DataState';
 import notificationStore from '../../stores/notificationStore';
 import { useStoreSync } from '../../hooks/useStore';
 import { Bell, Check, CheckCheck, Trash2 } from 'lucide-react';
@@ -16,7 +18,8 @@ const NIVEL_CORES = {
 };
 
 export default function AdminNotificacoes() {
-    const storeTick = useStoreSync();
+    useStoreSync();
+    const action = useAction();
     const [filtro, setFiltro] = useState('todas');
 
     const todas = notificationStore.getParaAdmin();
@@ -25,18 +28,19 @@ export default function AdminNotificacoes() {
 
     return (
         <div className="p-6 md:p-10 max-w-[1600px] mx-auto">
+            <DataState error={action.error} loading={action.busy} />
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
                 <div>
                     <span className="text-[10px] font-bold uppercase tracking-[1em] text-primary mb-3 block">Central</span>
-                    <h1 className="font-display font-bold text-3xl md:text-5xl uppercase tracking-tighter">Notificações</h1>
+                    <h1 className="font-display font-bold text-2xl sm:text-3xl md:text-5xl uppercase tracking-tighter">Notificações</h1>
                 </div>
-                <div className="flex gap-4">
-                    <button onClick={() => notificationStore.marcarTodasLidas('admin')}
+                <div className="flex flex-wrap gap-4">
+                    <button disabled={action.busy} onClick={() => action.execute(() => notificationStore.marcarTodasLidas('admin'))}
                         className="px-6 py-4 bg-white/[0.02] border border-white/5 text-[10px] font-bold uppercase tracking-widest text-zinc-400 hover:text-white hover:border-white/20 transition-colors flex items-center gap-2">
                         <CheckCheck size={16} /> Marcar Lidas
                     </button>
-                    <button onClick={() => notificationStore.limparLidas('admin')}
+                    <button disabled={action.busy} onClick={() => action.execute(() => notificationStore.limparLidas('admin'))}
                         className="px-6 py-4 bg-red-500/5 text-red-500/50 hover:text-red-400 border border-red-500/10 hover:border-red-500/20 text-[10px] font-bold uppercase tracking-widest transition-colors flex items-center gap-2">
                         <Trash2 size={16} /> Limpar
                     </button>
@@ -47,7 +51,7 @@ export default function AdminNotificacoes() {
             <div className="flex bg-white/[0.02] border border-white/5 w-fit p-1 mb-8">
                 {[['todas', `Todas (${todas.length})`], ['nao_lidas', `Não Lidas (${naoLidas.length})`]].map(([v, l]) => (
                     <button key={v} onClick={() => setFiltro(v)}
-                        className={`px-8 py-3 text-[10px] font-bold uppercase tracking-widest transition-all ${filtro === v ? 'bg-primary text-black' : 'text-zinc-500 hover:text-white hover:bg-white/[0.02]'}`}>
+                        className={`px-4 sm:px-8 py-3 text-[10px] font-bold uppercase tracking-widest transition-all ${filtro === v ? 'bg-primary text-black' : 'text-zinc-500 hover:text-white hover:bg-white/[0.02]'}`}>
                         {l}
                     </button>
                 ))}
@@ -78,7 +82,7 @@ export default function AdminNotificacoes() {
                                 </div>
 
                                 {!n.lida && (
-                                    <button onClick={() => notificationStore.marcarLida(n.id)}
+                                    <button disabled={action.busy} onClick={() => action.execute(() => notificationStore.marcarLida(n.id))}
                                         className="w-10 h-10 rounded-full border border-white/5 flex items-center justify-center text-zinc-500 hover:text-primary hover:border-primary/50 transition-colors shrink-0" title="Marcar como lida">
                                         <Check size={16} />
                                     </button>

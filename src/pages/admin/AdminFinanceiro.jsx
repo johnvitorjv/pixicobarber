@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { useAction } from '../../hooks/useAction';
+import DataState from '../../components/DataState';
+import { bahiaDate, calendarDate } from '../../lib/bookingRules';
 import financialStore from '../../stores/financialStore';
 import { FORMAS_PAGAMENTO, STATUS } from '../../data/models';
 import { useStoreSync } from '../../hooks/useStore';
@@ -7,10 +10,11 @@ import { useSupabaseAppointments } from '../../hooks/useSupabase';
 import { DollarSign, TrendingUp, TrendingDown, Plus, X, ArrowDown, ArrowUp, Scissors, CreditCard, Calendar } from 'lucide-react';
 
 function formatPreco(v) { return `R$ ${Number(v || 0).toFixed(2)}`; }
-function formatData(d) { if (!d) return ''; try { return new Date(d).toLocaleDateString('pt-BR'); } catch { return d; } }
+function formatData(d) { if (!d) return ''; try { return new Date(d.length === 10 ? d + 'T12:00:00' : d).toLocaleDateString('pt-BR'); } catch { return d; } }
 
 export default function AdminFinanceiro() {
-    const storeTick = useStoreSync();
+    useStoreSync();
+    const action = useAction();
     const [periodo, setPeriodo] = useState('mes');
     const [tab, setTab] = useState('resumo');
 
@@ -21,18 +25,18 @@ export default function AdminFinanceiro() {
 
     // Supabase data
     const sb = isSupabaseConfigured();
-    const { appointments: sbApps } = useSupabaseAppointments();
+    const { appointments: sbApps, loading, error, refetch } = useSupabaseAppointments();
 
     // ═══ Calcular dados financeiros direto dos agendamentos concluídos ═══
-    const hoje = new Date();
-    const hojeStr = hoje.toISOString().split('T')[0];
+    const hoje = new Date(bahiaDate() + 'T12:00:00');
+    const hojeStr = bahiaDate(hoje);
 
     function getInicioPeriodo() {
         if (periodo === 'dia') return hojeStr;
         if (periodo === 'semana') {
             const d = new Date(hoje);
-            d.setDate(hoje.getDate() - hoje.getDay());
-            return d.toISOString().split('T')[0];
+            d.setDate(hoje.getDate() - 6);
+            return calendarDate(d);
         }
         if (periodo === 'mes') {
             return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-01`;
@@ -56,12 +60,12 @@ export default function AdminFinanceiro() {
     // Entradas do financialStore (despesas manuais)
     const despesasStore = financialStore.getSaidas();
     const despesasPeriodo = despesasStore.filter(t => {
-        const d = (t.criadoEm || '').split('T')[0];
+        const d = t.criadoEm ? bahiaDate(new Date(t.criadoEm)) : '';
         return d >= inicioPeriodo && d <= hojeStr;
     });
 
     // STATS
-    const totalEntradas = concluidosPeriodo.reduce((s, a) => s + (a.servicoPreco || 0), 0);
+    const totalEntradas = concluidosPeriodo.reduce((s, a) => s + (a.valorCobrado ?? a.servicoPreco ?? 0), 0);
     const totalSaidas = despesasPeriodo.reduce((s, t) => s + (t.valor || 0), 0);
     const lucro = totalEntradas - totalSaidas;
     const ticketMedio = concluidosPeriodo.length > 0 ? totalEntradas / concluidosPeriodo.length : 0;
@@ -71,7 +75,7 @@ export default function AdminFinanceiro() {
     concluidosPeriodo.forEach(a => {
         const key = a.servicoNome || 'Serviço';
         if (!porServico[key]) porServico[key] = { total: 0, qtd: 0 };
-        porServico[key].total += a.servicoPreco || 0;
+        porServico[key].total += a.valorCobrado ?? a.servicoPreco ?? 0;
         porServico[key].qtd++;
     });
 
@@ -81,8 +85,8 @@ export default function AdminFinanceiro() {
             id: a.id,
             tipo: 'entrada',
             descricao: `${a.servicoNome || 'Serviço'} — ${a._clienteNome || 'Cliente'}`,
-            valor: a.servicoPreco || 0,
-            formaPagamento: '',
+            valor: a.valorCobrado ?? a.servicoPreco ?? 0,
+            formaPagamento: a.formaPagamento || '',
             criadoEm: a.data || a.criadoEm,
         })),
         ...despesasPeriodo.map(t => ({
@@ -95,25 +99,24 @@ export default function AdminFinanceiro() {
         })),
     ].sort((a, b) => (b.criadoEm || '').localeCompare(a.criadoEm || ''));
 
-    function addDespesa() {
-        if (!despDescricao || !despValor) return;
-        financialStore.registrarDespesa({ descricao: despDescricao, valor: Number(despValor), categoria: despCategoria });
-        setDespDescricao('');
-        setDespValor('');
-        setTab('transacoes');
+    async function addDespesa() {
+        if (await action.execute(() => financialStore.registrarDespesa({ descricao: despDescricao, valor: Number(despValor), categoria: despCategoria }), 'Despesa registrada.')) {
+            setDespDescricao(''); setDespValor(''); setTab('transacoes');
+        }
     }
 
     return (
         <div className="p-6 md:p-10 max-w-[1600px] mx-auto">
+            <DataState loading={loading || action.busy} error={error || action.error} retry={refetch} />
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
                 <div>
                     <span className="text-[10px] font-bold uppercase tracking-[1em] text-primary mb-3 block">Relatórios</span>
-                    <h1 className="font-display font-bold text-3xl md:text-5xl uppercase tracking-tighter">Financeiro</h1>
+                    <h1 className="font-display font-bold text-2xl sm:text-3xl md:text-5xl uppercase tracking-tighter">Financeiro</h1>
                 </div>
 
                 {/* Period toggle superior */}
-                <div className="flex bg-white/[0.02] border border-white/5 p-1">
+                <div className="flex flex-wrap bg-white/[0.02] border border-white/5 p-1">
                     {[
                         { id: 'dia', label: 'Hoje' },
                         { id: 'semana', label: '7 Dias' },
@@ -273,7 +276,7 @@ export default function AdminFinanceiro() {
                                 </select>
                             </div>
                         </div>
-                        <button onClick={addDespesa} disabled={!despDescricao || !despValor} className="w-full bg-primary text-black py-4 mt-4 font-display font-bold uppercase text-xs tracking-[0.3em] hover:bg-white transition-colors disabled:opacity-30 disabled:hover:bg-primary disabled:cursor-not-allowed flex items-center justify-center gap-3">
+                        <button onClick={addDespesa} disabled={action.busy || !despDescricao.trim() || Number(despValor) <= 0} className="w-full bg-primary text-black py-4 mt-4 font-display font-bold uppercase text-xs tracking-[0.3em] hover:bg-white transition-colors disabled:opacity-30 disabled:hover:bg-primary disabled:cursor-not-allowed flex items-center justify-center gap-3">
                             <Plus size={16} /> Confirmar Cadastro
                         </button>
                     </div>

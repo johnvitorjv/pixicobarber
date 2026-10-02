@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/auth';
 import notificationStore from '../../stores/notificationStore';
-import clientStore from '../../stores/clientStore';
+import { useAction } from '../../hooks/useAction';
+import { useStoreSync } from '../../hooks/useStore';
+import DataState from '../../components/DataState';
 import { Avatar } from '../../components/PhotoUpload';
 import {
     LayoutDashboard, CalendarDays, Users, Clock, DollarSign,
@@ -23,15 +25,14 @@ const NAV_ITEMS = [
 
 export default function AdminLayout() {
     const { user, logout } = useAuth();
+    useStoreSync();
+    const action = useAction();
     const location = useLocation();
     const navigate = useNavigate();
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const notifsNaoLidas = notificationStore.getContadorAdmin();
 
-    function handleLogout() {
-        logout();
-        navigate('/');
-    }
+    async function handleLogout() { await action.execute(() => logout(() => navigate('/', { replace: true }))); }
 
     function isActive(path) {
         if (path === '/admin') return location.pathname === '/admin';
@@ -81,7 +82,7 @@ export default function AdminLayout() {
                 {/* Footer */}
                 <div className="p-6 border-t border-white/5 mt-auto">
                     <div className="flex items-center gap-4 mb-4">
-                        <Avatar src={clientStore.getById(user?.id)?.fotoUrl} initials={user?.nome?.[0] || 'A'} size="sm" className="ring-1 ring-primary/20" />
+                        <Avatar src={user?.fotoUrl} initials={user?.nome?.[0] || 'A'} size="sm" className="ring-1 ring-primary/20" />
                         <div className="flex-1 min-w-0">
                             <span className="text-sm font-bold text-white block truncate">{user?.nome}</span>
                             <span className="text-[9px] text-primary uppercase tracking-[0.3em] font-bold">Admin</span>
@@ -147,7 +148,7 @@ export default function AdminLayout() {
                         </nav>
                         <div className="p-6 border-t border-white/5 bg-black">
                             <div className="flex items-center gap-4 mb-6">
-                                <Avatar src={clientStore.getById(user?.id)?.fotoUrl} initials={user?.nome?.[0] || 'A'} size="sm" className="ring-1 ring-primary/20" />
+                                <Avatar src={user?.fotoUrl} initials={user?.nome?.[0] || 'A'} size="sm" className="ring-1 ring-primary/20" />
                                 <div className="flex-1 min-w-0">
                                     <span className="text-sm font-bold text-white block truncate">{user?.nome}</span>
                                     <span className="text-[9px] text-primary uppercase tracking-[0.3em] font-bold">Admin</span>
@@ -162,8 +163,8 @@ export default function AdminLayout() {
             )}
 
             {/* Main Content */}
-            <main className="flex-1 lg:ml-64 pt-14 lg:pt-0 min-h-screen">
-                <Outlet />
+            <main className="flex-1 min-w-0 lg:ml-64 pt-14 lg:pt-0 min-h-screen">
+                <DataState error={action.error} /><Outlet />
             </main>
         </div>
     );

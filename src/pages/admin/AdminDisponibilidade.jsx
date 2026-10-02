@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { useAction } from '../../hooks/useAction';
+import DataState from '../../components/DataState';
+import { calendarDate, bahiaDate } from '../../lib/bookingRules';
 import availabilityStore from '../../stores/availabilityStore';
 import { useStoreSync } from '../../hooks/useStore';
 import { Calendar, Lock, Unlock, ChevronLeft, ChevronRight, Settings, Save, Plus, Trash2 } from 'lucide-react';
@@ -7,13 +10,15 @@ const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
 export default function AdminDisponibilidade() {
-    const storeTick = useStoreSync(); // Reatividade automática quando localStorage muda
+    useStoreSync();
     const [mesAtual, setMesAtual] = useState(new Date());
     const [diaSel, setDiaSel] = useState(null);
     const [tab, setTab] = useState('calendario'); // calendario | config
 
     // Config state
-    const [config, setConfig] = useState(() => availabilityStore.getConfig());
+    const action = useAction();
+    const [draft, setConfig] = useState(null);
+    const config = draft || availabilityStore.getConfig();
     const [feriaInicio, setFeriaInicio] = useState('');
     const [feriaFim, setFeriaFim] = useState('');
     const [bloqData, setBloqData] = useState('');
@@ -32,48 +37,40 @@ export default function AdminDisponibilidade() {
         for (let i = 0; i < primeiroDia; i++) dias.push(null);
         for (let d = 1; d <= totalDias; d++) {
             const data = new Date(ano, mes, d);
-            const chave = data.toISOString().split('T')[0];
+            const chave = calendarDate(data);
             const info = disponibilidade[chave] || availabilityStore.getDay(chave);
-            dias.push({ dia: d, data: chave, passado: data < hoje, disponivel: info?.disponivel, motivo: info?.motivo, faixas: info?.faixas || [] });
+            dias.push({ dia: d, data: chave, passado: chave < bahiaDate(), disponivel: info?.disponivel, motivo: info?.motivo, faixas: info?.faixas || [] });
         }
         return dias;
     }
 
-    function toggleDia(dateStr, atualDisponivel) {
-        if (atualDisponivel) {
-            availabilityStore.closeDay(dateStr, 'Fechado pelo admin');
-        } else {
-            availabilityStore.openDay(dateStr);
+    async function toggleDia(dateStr, atualDisponivel) {
+        await action.execute(() => atualDisponivel ? availabilityStore.closeDay(dateStr, 'Fechado pelo admin') : availabilityStore.openDay(dateStr), 'Disponibilidade atualizada.');
+    }
+    async function salvarConfig() { await action.execute(() => availabilityStore.saveConfig(config), 'Regras salvas.'); }
+    async function addBloqueio() {
+        if (!bloqData) return;
+        if (await action.execute(() => availabilityStore.addBloqueioEspecial(bloqData, bloqMotivo || 'Bloqueado'))) {
+            setBloqData(''); setBloqMotivo(''); setConfig(null);
         }
     }
-
-    function salvarConfig() {
-        availabilityStore.saveConfig(config);
-    }
-
-    function addBloqueio() {
-        if (!bloqData) return;
-        availabilityStore.addBloqueioEspecial(bloqData, bloqMotivo || 'Bloqueado');
-        setBloqData(''); setBloqMotivo('');
-        setConfig(availabilityStore.getConfig());
-    }
-
-    function addFerias() {
+    async function addFerias() {
         if (!feriaInicio || !feriaFim) return;
-        availabilityStore.addFerias(feriaInicio, feriaFim);
-        setFeriaInicio(''); setFeriaFim('');
-        setConfig(availabilityStore.getConfig());
+        if (await action.execute(() => availabilityStore.addFerias(feriaInicio, feriaFim))) { setFeriaInicio(''); setFeriaFim(''); setConfig(null); }
     }
 
+    if (!config) return <DataState loading />;
     const dayInfo = diaSel ? (disponibilidade[diaSel] || availabilityStore.getDay(diaSel)) : null;
 
     return (
         <div className="p-6 md:p-10 max-w-[1600px] mx-auto">
+            <DataState error={action.error} loading={action.busy} />
+            {action.message && <p role="status" className="text-green-400 mb-4">{action.message}</p>}
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
                 <div>
                     <span className="text-[10px] font-bold uppercase tracking-[1em] text-primary mb-3 block">Gestão</span>
-                    <h1 className="font-display font-bold text-3xl md:text-5xl uppercase tracking-tighter">Disponibilidade</h1>
+                    <h1 className="font-display font-bold text-2xl sm:text-3xl md:text-5xl uppercase tracking-tighter">Disponibilidade</h1>
                 </div>
             </div>
 
@@ -93,10 +90,10 @@ export default function AdminDisponibilidade() {
             {tab === 'calendario' && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* Calendar Grid */}
-                    <div className="lg:col-span-2 bg-black border border-white/5 p-8">
+                    <div className="lg:col-span-2 bg-black border border-white/5 p-4 sm:p-8">
                         <div className="flex items-center justify-between mb-8 border-b border-white/10 pb-4">
                             <button onClick={() => setMesAtual(new Date(mesAtual.getFullYear(), mesAtual.getMonth() - 1))} className="text-zinc-500 hover:text-primary transition-colors p-2 -ml-2"><ChevronLeft size={24} /></button>
-                            <span className="font-display font-bold uppercase tracking-widest text-lg">{MESES[mesAtual.getMonth()]} {mesAtual.getFullYear()}</span>
+                            <span className="font-display font-bold uppercase tracking-widest text-sm sm:text-lg">{MESES[mesAtual.getMonth()]} {mesAtual.getFullYear()}</span>
                             <button onClick={() => setMesAtual(new Date(mesAtual.getFullYear(), mesAtual.getMonth() + 1))} className="text-zinc-500 hover:text-primary transition-colors p-2 -mr-2"><ChevronRight size={24} /></button>
                         </div>
                         <div className="grid grid-cols-7 gap-1">
@@ -145,7 +142,7 @@ export default function AdminDisponibilidade() {
                                             {dayInfo.faixas.map(f => (
                                                 <div key={f.id} className={`flex items-center justify-between py-3 px-4 transition-colors group ${f.disponivel ? 'bg-white/[0.02] border border-white/5 hover:border-white/20' : 'bg-red-500/5 text-zinc-600 line-through border border-red-500/10'}`}>
                                                     <span className={`text-[11px] font-modern uppercase tracking-widest font-bold ${f.disponivel ? 'text-white group-hover:text-primary transition-colors' : 'text-red-500/50'}`}>{f.inicio} — {f.fim}</span>
-                                                    <button onClick={() => { f.disponivel ? availabilityStore.blockSlot(diaSel, f.id) : availabilityStore.unblockSlot(diaSel, f.id); }}
+                                                    <button disabled={action.busy} onClick={() => action.execute(() => f.disponivel ? availabilityStore.blockSlot(diaSel, f.id) : availabilityStore.unblockSlot(diaSel, f.id))}
                                                         className={`transition-colors ${f.disponivel ? 'text-zinc-500 hover:text-red-400' : 'text-red-500/50 hover:text-emerald-400'}`}>
                                                         {f.disponivel ? <Lock size={12} /> : <Unlock size={12} />}
                                                     </button>
@@ -158,7 +155,7 @@ export default function AdminDisponibilidade() {
                         ) : (
                             <div className="flex flex-col items-center justify-center text-center py-16 opacity-50">
                                 <Calendar size={48} className="text-zinc-600 mb-6" strokeWidth={1} />
-                                <p className="text-zinc-400 font-bold uppercase tracking-widest text-xs">Selecione uma data no calendário<br />para gerenciar a agenda local.</p>
+                                <p className="text-zinc-400 font-bold uppercase tracking-widest text-xs">Selecione uma data no calendário<br />para gerenciar a agenda.</p>
                             </div>
                         )}
                     </div>
@@ -173,7 +170,7 @@ export default function AdminDisponibilidade() {
                             <h3 className="font-display font-bold text-lg uppercase tracking-widest border-b border-white/10 pb-4 mb-6">Dias de Funcionamento</h3>
                             <div className="flex gap-3 flex-wrap mb-8">
                                 {DIAS_SEMANA.map((d, i) => (
-                                    <button key={i} onClick={() => setConfig(c => ({ ...c, diasFuncionamento: c.diasFuncionamento.includes(i) ? c.diasFuncionamento.filter(x => x !== i) : [...c.diasFuncionamento, i] }))}
+                                    <button key={i} onClick={() => setConfig(previous => { const c = previous || config; return ({ ...c, diasFuncionamento: c.diasFuncionamento.includes(i) ? c.diasFuncionamento.filter(x => x !== i) : [...c.diasFuncionamento, i] }); })}
                                         className={`w-12 h-12 flex items-center justify-center text-[10px] font-bold uppercase tracking-widest transition-all ${config.diasFuncionamento.includes(i) ? 'bg-primary text-black shadow-[0_0_15px_rgba(255,255,255,0.1)]' : 'bg-white/[0.02] text-zinc-500 border border-white/10 hover:border-white/30 hover:text-white'}`}>
                                         {d}
                                     </button>
@@ -182,19 +179,19 @@ export default function AdminDisponibilidade() {
 
                             <h3 className="font-display font-bold text-lg uppercase tracking-widest border-b border-white/10 pb-4 mb-6">Expediente</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                                <InputField label="Abertura" value={config.horarioInicio} onChange={v => setConfig(c => ({ ...c, horarioInicio: v }))} type="time" />
-                                <InputField label="Fechamento" value={config.horarioFim} onChange={v => setConfig(c => ({ ...c, horarioFim: v }))} type="time" />
-                                <InputField label="Pausa Início" value={config.intervaloAlmoco.inicio} onChange={v => setConfig(c => ({ ...c, intervaloAlmoco: { ...c.intervaloAlmoco, inicio: v } }))} type="time" />
-                                <InputField label="Pausa Fim" value={config.intervaloAlmoco.fim} onChange={v => setConfig(c => ({ ...c, intervaloAlmoco: { ...c.intervaloAlmoco, fim: v } }))} type="time" />
+                                <InputField label="Abertura" value={config.horarioInicio} onChange={v => setConfig(previous => { const c = previous || config; return ({ ...c, horarioInicio: v }); })} type="time" />
+                                <InputField label="Fechamento" value={config.horarioFim} onChange={v => setConfig(previous => { const c = previous || config; return ({ ...c, horarioFim: v }); })} type="time" />
+                                <InputField label="Pausa Início" value={config.intervaloAlmoco.inicio} onChange={v => setConfig(previous => { const c = previous || config; return ({ ...c, intervaloAlmoco: { ...c.intervaloAlmoco, inicio: v } }); })} type="time" />
+                                <InputField label="Pausa Fim" value={config.intervaloAlmoco.fim} onChange={v => setConfig(previous => { const c = previous || config; return ({ ...c, intervaloAlmoco: { ...c.intervaloAlmoco, fim: v } }); })} type="time" />
                             </div>
 
                             <h3 className="font-display font-bold text-lg uppercase tracking-widest border-b border-white/10 pb-4 mb-6">Regras de Agendamento</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                                <InputField label="Duração Media (min)" value={config.duracaoSlot} onChange={v => setConfig(c => ({ ...c, duracaoSlot: Number(v) }))} type="number" />
-                                <InputField label="Limite Clientes/Dia" value={config.limiteClientesDia} onChange={v => setConfig(c => ({ ...c, limiteClientesDia: Number(v) }))} type="number" />
+                                <InputField label="Intervalo entre inícios (min)" value={config.duracaoSlot} onChange={v => setConfig(previous => { const c = previous || config; return ({ ...c, duracaoSlot: Number(v) }); })} type="number" />
+                                <InputField label="Limite Clientes/Dia" value={config.limiteClientesDia} onChange={v => setConfig(previous => { const c = previous || config; return ({ ...c, limiteClientesDia: Number(v) }); })} type="number" />
                             </div>
 
-                            <button onClick={salvarConfig} className="w-full bg-primary text-black py-4 font-display font-bold uppercase text-xs tracking-[0.3em] flex items-center justify-center gap-3 hover:bg-white transition-colors">
+                            <button disabled={action.busy} onClick={salvarConfig} className="w-full bg-primary text-black py-4 font-display font-bold uppercase text-xs tracking-[0.3em] flex items-center justify-center gap-3 hover:bg-white transition-colors">
                                 <Save size={16} /> Salvar Regras Globais
                             </button>
                         </section>
@@ -209,7 +206,7 @@ export default function AdminDisponibilidade() {
                                     {config.bloqueiosEspeciais.map(b => (
                                         <div key={b.data} className="flex items-center justify-between py-4 px-4 bg-white/[0.02] border border-white/5 hover:border-white/10 transition-colors">
                                             <span className="font-display font-bold text-white uppercase tracking-wider text-sm">{b.data.split('-').reverse().join('/')} <span className="text-zinc-500 text-xs ml-2">— {b.motivo}</span></span>
-                                            <button onClick={() => { availabilityStore.removeBloqueioEspecial(b.data); setConfig(availabilityStore.getConfig()); }} className="text-red-500/50 hover:text-red-400 p-2"><Trash2 size={16} /></button>
+                                            <button disabled={action.busy} onClick={() => action.execute(async () => { await availabilityStore.removeBloqueioEspecial(b.data); setConfig(null); })} className="text-red-500/50 hover:text-red-400 p-2"><Trash2 size={16} /></button>
                                         </div>
                                     ))}
                                 </div>
@@ -231,7 +228,7 @@ export default function AdminDisponibilidade() {
                                     {config.ferias.map(f => (
                                         <div key={f.inicio} className="flex items-center justify-between py-4 px-4 bg-white/[0.02] border border-white/5 hover:border-white/10 transition-colors">
                                             <span className="font-display font-bold text-white uppercase tracking-wider text-sm">{f.inicio.split('-').reverse().join('/')} <span className="text-zinc-500">→</span> {f.fim.split('-').reverse().join('/')}</span>
-                                            <button onClick={() => { availabilityStore.removeFerias(f.inicio); setConfig(availabilityStore.getConfig()); }} className="text-red-500/50 hover:text-red-400 p-2"><Trash2 size={16} /></button>
+                                            <button disabled={action.busy} onClick={() => action.execute(async () => { await availabilityStore.removeFerias(f.inicio); setConfig(null); })} className="text-red-500/50 hover:text-red-400 p-2"><Trash2 size={16} /></button>
                                         </div>
                                     ))}
                                 </div>

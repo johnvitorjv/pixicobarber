@@ -1,30 +1,25 @@
 import { Link } from 'react-router-dom';
 import { STATUS_CONFIG, STATUS } from '../../data/models';
-import { isSupabaseConfigured } from '../../lib/supabase';
-import { useSupabaseAppointments, useSupabaseClients, useSupabaseServices } from '../../hooks/useSupabase';
-// Fallbacks localStorage (só usados sem Supabase)
-import appointmentStore from '../../stores/appointmentStore';
-import clientStore from '../../stores/clientStore';
-import serviceStore from '../../stores/serviceStore';
+import DataState from '../../components/DataState';
+import { bahiaDate } from '../../lib/bookingRules';
+import { useSupabaseAppointments, useSupabaseClients } from '../../hooks/useSupabase';
+// Dados persistidos exclusivamente pelo Supabase.
 import { useStoreSync } from '../../hooks/useStore';
 import {
     Clock, CheckCircle, XCircle, Users, Star, Ban, DollarSign,
     TrendingUp, CalendarDays, ArrowUpRight, Bell, AlertTriangle, UserPlus, ChevronRight
 } from 'lucide-react';
 
-function formatPreco(v) { return `R$ ${Number(v || 0).toFixed(0)}`; }
-function formatData(d) { if (!d) return ''; const [y, m, dd] = d.split('-'); return `${dd}/${m}`; }
 
 export default function AdminDashboard() {
-    const storeTick = useStoreSync();
-    const sb = isSupabaseConfigured();
+    useStoreSync();
 
     // Dados do Supabase
-    const { appointments: sbApps } = useSupabaseAppointments();
-    const { clients: sbClients } = useSupabaseClients();
+    const { appointments: sbApps, loading, error, refetch } = useSupabaseAppointments();
+    const { clients: sbClients, error: clientsError, loading: clientsLoading } = useSupabaseClients();
 
-    // Stats — Supabase ou localStorage
-    const allApps = sb ? sbApps : appointmentStore.getAll();
+    // Dados persistidos exclusivamente pelo Supabase.
+    const allApps = sbApps;
     const agStats = {
         total: allApps.length,
         pendentes: allApps.filter(a => a.status === 'pendente').length,
@@ -32,15 +27,15 @@ export default function AdminDashboard() {
         rejeitados: allApps.filter(a => a.status === 'rejeitado').length,
         aguardando: allApps.filter(a => a.status === 'aguardando_cliente').length,
         concluidos: allApps.filter(a => a.status === 'concluido').length,
-        cancelados: allApps.filter(a => a.status === 'cancelado_cliente').length,
+        cancelados: allApps.filter(a => ['cancelado_cliente', 'cancelado_admin'].includes(a.status)).length,
         naoCompareceram: allApps.filter(a => a.status === 'ausente').length,
     };
 
-    const clTotal = sb ? sbClients.length : clientStore.getAll().length;
+    const clTotal = sbClients.length;
 
-    const hoje = new Date().toISOString().split('T')[0];
+    const hoje = bahiaDate();
     const hojeApps = allApps
-        .filter(a => a.data === hoje && (a.status === 'confirmado' || a.status === 'pendente'))
+        .filter(a => a.data === hoje && ['confirmado','pendente','remarcado','aguardando_cliente'].includes(a.status))
         .sort((a, b) => (a.faixaInicio || '').localeCompare(b.faixaInicio || ''));
     const pendentes = allApps.filter(a => a.status === 'pendente');
     const aguardando = allApps.filter(a => a.status === 'aguardando_cliente');
@@ -58,14 +53,15 @@ export default function AdminDashboard() {
 
     return (
         <div className="p-6 md:p-10 max-w-[1600px] mx-auto">
+            <DataState loading={loading || clientsLoading} error={error || clientsError} retry={refetch} />
             {/* Header */}
             <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
                     <span className="text-[10px] font-bold uppercase tracking-[1em] text-primary mb-3 block">Painel Administrativo</span>
-                    <h1 className="font-display font-bold text-3xl md:text-5xl uppercase tracking-tighter">Dashboard</h1>
+                    <h1 className="font-display font-bold text-2xl sm:text-3xl md:text-5xl uppercase tracking-tighter">Dashboard</h1>
                 </div>
                 <div className="font-modern text-[10px] uppercase tracking-widest text-zinc-500 bg-white/5 px-4 py-2 border border-white/10">
-                    {new Date(hoje).toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
+                    {new Date(hoje + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
                 </div>
             </div>
 
@@ -103,7 +99,7 @@ export default function AdminDashboard() {
                         <div className="space-y-3">
                             {hojeApps.slice(0, 6).map(ag => {
                                 const sc = STATUS_CONFIG[ag.status];
-                                const nome = sb ? (ag._clienteNome || 'Cliente') : (clientStore.getById(ag.clienteId)?.nome || 'Cliente');
+                                const nome = (ag._clienteNome || 'Cliente');
                                 return (
                                     <div key={ag.id} className="group flex items-center gap-6 p-4 bg-white/[0.02] border border-white/5 hover:border-primary/20 transition-colors">
                                         <span className="text-lg font-display font-bold text-primary w-20 shrink-0 tabular-nums">{ag.faixaInicio}</span>

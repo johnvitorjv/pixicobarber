@@ -10,6 +10,7 @@ export const STATUS = {
     AGUARDANDO_CLIENTE: 'aguardando_cliente',
     REMARCADO: 'remarcado',
     CANCELADO_CLIENTE: 'cancelado_cliente',
+    CANCELADO_ADMIN: 'cancelado_admin',
     CONCLUIDO: 'concluido',
     NAO_COMPARECEU: 'ausente',
 };
@@ -21,6 +22,7 @@ export const STATUS_CONFIG = {
     [STATUS.AGUARDANDO_CLIENTE]: { label: 'Aguardando Cliente', cor: 'text-blue-400', bg: 'bg-blue-400/10', icon: 'MessageCircle' },
     [STATUS.REMARCADO]: { label: 'Remarcado', cor: 'text-purple-400', bg: 'bg-purple-400/10', icon: 'RefreshCw' },
     [STATUS.CANCELADO_CLIENTE]: { label: 'Cancelado', cor: 'text-zinc-400', bg: 'bg-zinc-400/10', icon: 'Ban' },
+    [STATUS.CANCELADO_ADMIN]: { label: 'Cancelado pela barbearia', cor: 'text-zinc-400', bg: 'bg-zinc-400/10', icon: 'Ban' },
     [STATUS.CONCLUIDO]: { label: 'Concluído', cor: 'text-emerald-400', bg: 'bg-emerald-400/10', icon: 'CheckCheck' },
     [STATUS.NAO_COMPARECEU]: { label: 'Não Compareceu', cor: 'text-orange-400', bg: 'bg-orange-400/10', icon: 'UserX' },
 };
@@ -75,85 +77,3 @@ export const FORMAS_PAGAMENTO = [
     { id: 'debito', label: 'Cartão Débito' },
     { id: 'credito', label: 'Cartão Crédito' },
 ];
-
-// ─── Factories ───
-export function criarAgendamento({ clienteId, servicoId, servicoNome, profissional, data, faixaInicio, faixaFim, observacaoCliente }) {
-    return {
-        id: `ag-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        clienteId,
-        servicoId,
-        servicoNome,
-        profissional: profissional || 'Pixico',
-        data,
-        faixaInicio,
-        faixaFim,
-        observacaoCliente: observacaoCliente || '',
-        observacaoAdmin: '',
-        status: STATUS.PENDENTE,
-        motivoRejeicao: null,
-        motivosRejeicaoIds: [],
-        sugestaoNovaData: null,
-        sugestaoNovaFaixa: null,
-        valorCobrado: null,
-        formaPagamento: null,
-        criadoEm: new Date().toISOString(),
-        atualizadoEm: new Date().toISOString(),
-        historicoAcoes: [
-            { acao: 'criado', por: 'cliente', porId: clienteId, em: new Date().toISOString() },
-        ],
-        whatsappEnviado: false,
-    };
-}
-
-export function criarCliente({ nome, sobrenome, whatsapp, email, senha, nascimento, observacoes, fotoUrl }) {
-    return {
-        id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        nome,
-        sobrenome,
-        whatsapp,
-        email: email.toLowerCase(),
-        senha,
-        nascimento: nascimento || null,
-        fotoUrl: fotoUrl || null,
-        role: 'client',
-        apelido: null,
-        observacoesAdmin: '',
-        observacoesCliente: observacoes || '',
-        favorito: false,
-        blacklist: false,
-        blacklistMotivo: null,
-        blacklistData: null,
-        tags: [],
-        scorePresenca: 100,
-        criadoEm: new Date().toISOString(),
-        ultimaAtividade: new Date().toISOString(),
-    };
-}
-
-export function criarNotificacao({ tipo, titulo, mensagem, destinatario, nivel, link }) {
-    return {
-        id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        tipo,
-        titulo,
-        mensagem,
-        destinatario, // 'admin' ou 'user-xxx'
-        lida: false,
-        nivel: nivel || NOTIF_NIVEIS.INFO,
-        link: link || null,
-        criadoEm: new Date().toISOString(),
-    };
-}
-
-export function criarTransacao({ tipo, categoria, descricao, valor, formaPagamento, agendamentoId, clienteId }) {
-    return {
-        id: `tx-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        tipo, // 'entrada' | 'saida'
-        categoria, // 'servico' | 'despesa' | 'outro'
-        descricao,
-        valor,
-        formaPagamento: formaPagamento || null,
-        agendamentoId: agendamentoId || null,
-        clienteId: clienteId || null,
-        criadoEm: new Date().toISOString(),
-    };
-}

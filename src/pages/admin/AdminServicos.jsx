@@ -1,7 +1,8 @@
 import { useState, useRef } from 'react';
-import serviceStore, { CATEGORIAS, BADGES } from '../../stores/serviceStore';
+import { CATEGORIAS, BADGES } from '../../stores/serviceStore';
 import { useStoreSync } from '../../hooks/useStore';
-import { isSupabaseConfigured } from '../../lib/supabase';
+import { useAction } from '../../hooks/useAction';
+import DataState from '../../components/DataState';
 import { useSupabaseServices, createServiceSupabase, updateServiceSupabase, deleteServiceSupabase } from '../../hooks/useSupabase';
 import {
     Scissors, Plus, Search, Filter, Edit3, Trash2, Copy, Eye, EyeOff,
@@ -24,18 +25,18 @@ function formatPreco(v) { return `R$ ${Number(v || 0).toFixed(0)}`; }
 // Componente principal
 // ═══════════════════════════════════════════════
 export default function AdminServicos() {
-    const storeTick = useStoreSync();
+    useStoreSync();
     const [busca, setBusca] = useState('');
     const [filtroStatus, setFiltroStatus] = useState('');
     const [filtroCategoria, setFiltroCategoria] = useState('');
     const [editando, setEditando] = useState(null); // null | 'novo' | serviceId
     const [confirmDelete, setConfirmDelete] = useState(null);
 
-    const sb = isSupabaseConfigured();
-    const { services: sbServices, loading: sbLoading, refetch: refetchServices, getStats: sbGetStats } = useSupabaseServices();
+    const action = useAction();
+    const { services: sbServices, loading: sbLoading, error: queryError, refetch: refetchServices, getStats: sbGetStats } = useSupabaseServices();
 
-    const todos = sb ? sbServices : serviceStore.getAll();
-    const stats = sb ? sbGetStats() : serviceStore.getStats();
+    const todos = sbServices;
+    const stats = sbGetStats();
 
     // Filtrar
     const filtrados = todos.filter(s => {
@@ -49,39 +50,35 @@ export default function AdminServicos() {
     });
 
     async function handleDelete(id) {
-        if (sb) {
-            try { await deleteServiceSupabase(id); refetchServices(); } catch (err) { console.error(err); }
-        } else { serviceStore.delete(id); }
-        setConfirmDelete(null);
+        await action.execute(async () => { await deleteServiceSupabase(id); await refetchServices(); setConfirmDelete(null); });
     }
-
-    function handleDuplicate(id) {
-        // Duplicação simples via local (Supabase não tem duplicate)
+    async function handleDuplicate(id) {
         const original = todos.find(s => s.id === id);
         if (!original) return;
-        const copy = { ...original, nome: `${original.nome} (cópia)` };
-        delete copy.id;
-        if (sb) {
-            createServiceSupabase(copy).then(() => refetchServices()).catch(console.error);
-        } else { serviceStore.duplicate(id); }
+        await action.execute(async () => { await createServiceSupabase({ ...original, nome: original.nome + ' (cópia)', ordem: todos.length + 1 }); await refetchServices(); });
     }
-
     async function handleToggleStatus(id) {
-        const s = todos.find(s => s.id === id);
-        if (!s) return;
-        const novoStatus = s.status === 'ativo' ? 'inativo' : 'ativo';
-        if (sb) {
-            try { await updateServiceSupabase(id, { status: novoStatus }); refetchServices(); } catch (err) { console.error(err); }
-        } else { serviceStore.toggleStatus(id); }
+        const current = todos.find(s => s.id === id);
+        await action.execute(async () => { await updateServiceSupabase(id, { status: current.status === 'ativo' ? 'inativo' : 'ativo' }); await refetchServices(); });
+    }
+    async function move(id, delta) {
+        const idx = todos.findIndex(s => s.id === id), other = todos[idx + delta];
+        if (!other) return;
+        await action.execute(async () => {
+            await updateServiceSupabase(id, { ordem: other.ordem });
+            await updateServiceSupabase(other.id, { ordem: todos[idx].ordem });
+            await refetchServices();
+        });
     }
 
     return (
         <div className="p-6 md:p-10 max-w-[1600px] mx-auto">
+            <DataState loading={sbLoading || action.busy} error={queryError || action.error} retry={refetchServices} />
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
                 <div>
                     <span className="text-[10px] font-bold uppercase tracking-[1em] text-primary mb-3 block">Catálogo</span>
-                    <h1 className="font-display font-bold text-3xl md:text-5xl uppercase tracking-tighter">Serviços</h1>
+                    <h1 className="font-display font-bold text-2xl sm:text-3xl md:text-5xl uppercase tracking-tighter">Serviços</h1>
                 </div>
                 <button
                     onClick={() => setEditando('novo')}
@@ -118,7 +115,7 @@ export default function AdminServicos() {
                         className="w-full bg-transparent border-b border-white/20 pl-8 pr-4 py-3 text-sm text-white font-modern focus:border-primary focus:outline-none placeholder:text-zinc-700 transition-colors"
                     />
                 </div>
-                <div className="flex gap-4">
+                <div className="flex flex-wrap gap-4">
                     <select
                         value={filtroStatus}
                         onChange={e => setFiltroStatus(e.target.value)}
@@ -157,13 +154,13 @@ export default function AdminServicos() {
                 </div>
             ) : (
                 <div className="space-y-3">
-                    {filtrados.map((servico, idx) => (
+                    {filtrados.map((servico) => (
                         <div
                             key={servico.id}
                             className={`flex flex-col md:flex-row md:items-center gap-4 p-4 md:p-5 border transition-all hover:bg-white/[0.02] group ${servico.status === 'inativo' ? 'border-white/5 opacity-60' : 'border-white/5 hover:border-white/20'
                                 } bg-black`}
                         >
-                            {/* Imagem */}
+                                    {/* Imagem */}
                             <div className="w-20 h-20 md:w-24 md:h-24 flex-shrink-0 bg-zinc-900 border border-white/10 flex items-center justify-center transition-colors group-hover:border-primary/20">
                                 {servico.imagemUrl ? (
                                     <img src={servico.imagemUrl} alt="" className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500" />
@@ -216,31 +213,11 @@ export default function AdminServicos() {
                             <div className="flex items-center justify-between md:justify-end gap-6 w-full md:w-auto">
                                 {/* Ordem */}
                                 <div className="flex items-center gap-2 flex-shrink-0 bg-white/[0.02] border border-white/5 px-2 py-1">
-                                    <button onClick={async () => {
-                                        if (sb) {
-                                            const s = todos.find(x => x.id === servico.id);
-                                            const idx = todos.indexOf(s);
-                                            if (idx > 0) {
-                                                await updateServiceSupabase(servico.id, { ordem: todos[idx - 1].ordem });
-                                                await updateServiceSupabase(todos[idx - 1].id, { ordem: servico.ordem });
-                                                refetchServices();
-                                            }
-                                        } else { serviceStore.moveUp(servico.id); }
-                                    }} className="text-zinc-600 hover:text-primary transition-colors p-1">
+                                    <button onClick={() => move(servico.id, -1)} className="text-zinc-600 hover:text-primary transition-colors p-1">
                                         <ChevronUp size={16} />
                                     </button>
                                     <span className="text-[10px] text-zinc-500 font-bold w-4 text-center tabular-nums">{servico.ordem}</span>
-                                    <button onClick={async () => {
-                                        if (sb) {
-                                            const s = todos.find(x => x.id === servico.id);
-                                            const idx = todos.indexOf(s);
-                                            if (idx < todos.length - 1) {
-                                                await updateServiceSupabase(servico.id, { ordem: todos[idx + 1].ordem });
-                                                await updateServiceSupabase(todos[idx + 1].id, { ordem: servico.ordem });
-                                                refetchServices();
-                                            }
-                                        } else { serviceStore.moveDown(servico.id); }
-                                    }} className="text-zinc-600 hover:text-primary transition-colors p-1">
+                                    <button onClick={() => move(servico.id, 1)} className="text-zinc-600 hover:text-primary transition-colors p-1">
                                         <ChevronDown size={16} />
                                     </button>
                                 </div>
@@ -271,7 +248,6 @@ export default function AdminServicos() {
                 <ServiceModal
                     serviceId={editando === 'novo' ? null : editando}
                     onClose={() => setEditando(null)}
-                    sb={sb}
                     sbServices={sbServices}
                     refetchServices={refetchServices}
                 />
@@ -289,11 +265,11 @@ export default function AdminServicos() {
                         <p className="text-zinc-400 font-modern text-sm leading-relaxed mb-8">
                             Tem certeza que deseja remover <strong className="text-white font-bold">"{todos.find(s => s.id === confirmDelete)?.nome || ''}"</strong> permanentemente? Esta ação não poderá ser desfeita.
                         </p>
-                        <div className="flex gap-4">
+                        <div className="flex flex-wrap gap-4">
                             <button onClick={() => setConfirmDelete(null)} className="flex-1 border border-white/10 py-4 text-[10px] font-bold font-display uppercase tracking-widest hover:bg-white/5 hover:text-white text-zinc-400 transition-colors">
                                 Cancelar
                             </button>
-                            <button onClick={() => handleDelete(confirmDelete)} className="flex-1 bg-red-500 text-white py-4 text-[10px] font-bold font-display uppercase tracking-widest hover:bg-red-600 transition-colors">
+                            <button disabled={action.busy} onClick={() => handleDelete(confirmDelete)} className="flex-1 bg-red-500 text-white py-4 text-[10px] font-bold font-display uppercase tracking-widest hover:bg-red-600 transition-colors">
                                 Excluir
                             </button>
                         </div>
@@ -307,16 +283,18 @@ export default function AdminServicos() {
 // ═══════════════════════════════════════════════
 // Modal de Edição/Criação
 // ═══════════════════════════════════════════════
-function ServiceModal({ serviceId, onClose, sb, sbServices, refetchServices }) {
-    const original = serviceId ? (sb ? sbServices.find(s => s.id === serviceId) : serviceStore.getById(serviceId)) : null;
+function ServiceModal({ serviceId, onClose, sbServices, refetchServices }) {
+    const [imageError, setImageError] = useState('');
+    const original = serviceId ? sbServices.find(s => s.id === serviceId) : null;
     const inputRef = useRef(null);
+    const action = useAction();
 
     const [form, setForm] = useState({
         nome: original?.nome || '',
         descricaoCurta: original?.descricaoCurta || '',
         descricaoDetalhada: original?.descricaoDetalhada || '',
         preco: original?.preco || 0,
-        precoPromocional: original?.precoPromocional || '',
+        precoPromocional: original?.precoPromocional ?? '',
         duracao: original?.duracao || 30,
         categoria: original?.categoria || 'corte',
         status: original?.status || 'ativo',
@@ -333,13 +311,17 @@ function ServiceModal({ serviceId, onClose, sb, sbServices, refetchServices }) {
     }
 
     function processImage(file) {
-        if (!ACCEPTED_TYPES.includes(file.type)) return;
-        if (file.size > MAX_SIZE_MB * 1024 * 1024) return;
+        setImageError('');
+        if (!ACCEPTED_TYPES.includes(file.type)) { setImageError('Use JPG, PNG ou WebP.'); return; }
+        if (file.size > MAX_SIZE_MB * 1024 * 1024) { setImageError('A imagem deve ter até 2 MB.'); return; }
 
         const reader = new FileReader();
+        reader.onerror = () => setImageError('Não foi possível ler a imagem.');
         reader.onload = (e) => {
             const img = new window.Image();
+            img.onerror = () => setImageError('Imagem inválida ou corrompida.');
             img.onload = () => {
+                if (!img.width || !img.height || Math.max(img.width, img.height) > 12000) { setImageError('Use uma imagem com até 12.000 pixels por lado.'); return; }
                 const canvas = document.createElement('canvas');
                 const MAX = 400;
                 let w = img.width, h = img.height;
@@ -355,34 +337,19 @@ function ServiceModal({ serviceId, onClose, sb, sbServices, refetchServices }) {
     }
 
     async function handleSave() {
-        const data = {
-            ...form,
-            preco: Number(form.preco) || 0,
-            precoPromocional: form.precoPromocional ? Number(form.precoPromocional) : null,
-            duracao: Number(form.duracao) || 30,
-        };
-
-        if (sb) {
-            try {
-                if (serviceId) {
-                    await updateServiceSupabase(serviceId, data);
-                } else {
-                    await createServiceSupabase(data);
-                }
-                refetchServices();
-            } catch (err) { console.error('Erro ao salvar serviço:', err); }
-        } else {
-            if (serviceId) {
-                serviceStore.update(serviceId, data);
-            } else {
-                serviceStore.create(data);
+        await action.execute(async () => {
+            const data = { ...form, nome: form.nome.trim(), preco: Number(form.preco),
+                precoPromocional: form.precoPromocional === '' ? null : Number(form.precoPromocional), duracao: Number(form.duracao) };
+            if (!data.nome || data.preco < 0 || !Number.isFinite(data.preco) || !Number.isInteger(data.duracao) || data.duracao < 5 || data.duracao > 480 || (data.precoPromocional !== null && (data.precoPromocional < 0 || !Number.isFinite(data.precoPromocional)))) {
+                throw new Error('Confira nome, preço e duração (5 a 480 minutos).');
             }
-        }
-        onClose();
+            if (serviceId) await updateServiceSupabase(serviceId, data); else await createServiceSupabase(data);
+            await refetchServices(); onClose();
+        });
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-8 md:pt-12 overflow-y-auto" onClick={onClose}>
+        <div role="dialog" aria-modal="true" aria-label={serviceId ? 'Editar Serviço' : 'Novo Serviço'} className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-8 md:pt-12 overflow-y-auto" onClick={onClose}>
             <div className="fixed inset-0 bg-black/80 backdrop-blur-sm" />
             <div className="relative bg-[#0a0a0a] border border-white/10 w-full max-w-3xl my-8 shadow-2xl" onClick={e => e.stopPropagation()}>
                 {/* Header */}
@@ -400,6 +367,7 @@ function ServiceModal({ serviceId, onClose, sb, sbServices, refetchServices }) {
 
                 {/* Form */}
                 <div className="p-6 md:p-8 space-y-8">
+                    <DataState error={action.error || imageError} loading={action.busy} />
                     {/* Imagem */}
                     <div>
                         <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-4 block">Capa do Serviço</label>
@@ -548,7 +516,7 @@ function ServiceModal({ serviceId, onClose, sb, sbServices, refetchServices }) {
                     <button onClick={onClose} className="flex-1 border border-white/10 py-4 font-display font-bold uppercase text-xs tracking-[0.3em] hover:bg-white/5 transition-colors">
                         Cancelar
                     </button>
-                    <button onClick={handleSave} className="flex-1 bg-primary text-black py-4 font-display font-bold uppercase text-xs tracking-[0.3em] hover:bg-white transition-colors flex items-center justify-center gap-2">
+                    <button disabled={action.busy} onClick={handleSave} className="flex-1 bg-primary text-black py-4 font-display font-bold uppercase text-xs tracking-[0.3em] hover:bg-white transition-colors flex items-center justify-center gap-2">
                         <Save size={16} /> {serviceId ? 'Atualizar Serviço' : 'Criar Serviço'}
                     </button>
                 </div>

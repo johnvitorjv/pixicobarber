@@ -1,20 +1,20 @@
 import { useState } from 'react';
-import clientStore from '../../stores/clientStore';
-import appointmentStore from '../../stores/appointmentStore';
+import { useAction } from '../../hooks/useAction';
+import DataState from '../../components/DataState';
 import { gerarLinkWhatsAppCliente } from '../../data/whatsappTemplates';
 import { STATUS } from '../../data/models';
 import { useStoreSync } from '../../hooks/useStore';
-import { isSupabaseConfigured } from '../../lib/supabase';
 import { useSupabaseClients, useSupabaseAppointments, updateProfileSupabase } from '../../hooks/useSupabase';
 import { Avatar } from '../../components/PhotoUpload';
 import {
     Search, Star, Ban, MessageCircle, Edit3, X, Eye, Tag, Plus, User, CalendarDays
 } from 'lucide-react';
 
-function formatData(d) { if (!d) return '—'; try { return new Date(d).toLocaleDateString('pt-BR'); } catch { return d; } }
+function formatData(d) { if (!d) return '—'; try { return new Date(d.length === 10 ? d + 'T12:00:00' : d).toLocaleDateString('pt-BR'); } catch { return d; } }
 
 export default function AdminClientes() {
-    const storeTick = useStoreSync();
+    useStoreSync();
+    const action = useAction();
     const [busca, setBusca] = useState('');
     const [filtro, setFiltro] = useState('todos');
     const [modal, setModal] = useState(null);
@@ -26,13 +26,12 @@ export default function AdminClientes() {
     const [blMotivo, setBlMotivo] = useState('');
 
     // Supabase data
-    const sbConfigured = isSupabaseConfigured();
-    const { clients: sbClients, loading: sbClientsLoading, refetch: refetchClients } = useSupabaseClients();
-    const { appointments: sbApps } = useSupabaseAppointments();
+    const { clients: sbClients, loading: sbClientsLoading, error: clientsError, refetch: refetchClients } = useSupabaseClients();
+    const { appointments: sbApps, error: appointmentsError, loading: appsLoading } = useSupabaseAppointments();
 
-    // Leitura reativa — Supabase ou localStorage
+    // Dados persistidos exclusivamente pelo Supabase.
     const clientes = (() => {
-        let all = sbConfigured ? sbClients : clientStore.getAll();
+        let all = sbClients;
         if (filtro === 'favoritos') all = all.filter(u => u.favorito);
         if (filtro === 'blacklist') all = all.filter(u => u.blacklist);
         if (busca) {
@@ -55,56 +54,43 @@ export default function AdminClientes() {
         setModal({ tipo: 'detalhe', cliente: c });
     }
 
-    function salvarEdicao() {
-        const { cliente } = modal;
-        clientStore.setApelido(cliente.id, editApelido);
-        clientStore.setObservacoes(cliente.id, editObs);
-        setModal(null);
+    async function salvarEdicao() {
+        await action.execute(async () => {
+            await updateProfileSupabase(modal.cliente.id, { apelido: editApelido.trim(), observacoes_admin: editObs.trim() });
+            await refetchClients(); setModal(null);
+        }, 'Cliente atualizado.');
     }
-
     async function toggleFav(id) {
-        if (sbConfigured) {
-            const current = sbClients.find(c => c.id === id);
-            try {
-                await updateProfileSupabase(id, { favorito: !(current?.favorito) });
-                await refetchClients();
-            } catch (err) { console.error('Erro ao alternar favorito:', err); }
-        } else {
-            clientStore.toggleFavorito(id);
-        }
+        const current = sbClients.find(c => c.id === id);
+        await action.execute(async () => { await updateProfileSupabase(id, { favorito: !current?.favorito }); await refetchClients(); });
     }
-
-    function toggleBlacklist(id, blacklist) {
-        if (blacklist) {
-            setBlMotivo('');
-            setModal({ tipo: 'blacklist', clienteId: id });
-        } else {
-            clientStore.setBlacklist(id, false, '');
-        }
+    async function toggleBlacklist(id, blacklist) {
+        if (blacklist) { setBlMotivo(''); setModal({ tipo: 'blacklist', clienteId: id }); }
+        else await action.execute(async () => { await updateProfileSupabase(id, { blacklist: false, blacklist_motivo: '' }); await refetchClients(); });
     }
-
-    function confirmarBlacklist() {
-        clientStore.setBlacklist(modal.clienteId, true, blMotivo);
-        setModal(null);
+    async function confirmarBlacklist() {
+        await action.execute(async () => {
+            await updateProfileSupabase(modal.clienteId, { blacklist: true, blacklist_motivo: blMotivo.trim() });
+            await refetchClients(); setModal(null);
+        });
     }
-
-    function addTag(clienteId) {
-        if (editTag.trim()) {
-            clientStore.addTag(clienteId, editTag.trim());
-            setEditTag('');
-        }
+    async function addTag(id) {
+        if (!editTag.trim()) return;
+        const current = sbClients.find(c => c.id === id);
+        await action.execute(async () => { await updateProfileSupabase(id, { tags: [...new Set([...current.tags, editTag.trim()])] }); await refetchClients(); setEditTag(''); });
     }
-
-    function removeTag(clienteId, tag) {
-        clientStore.removeTag(clienteId, tag);
+    async function removeTag(id, tag) {
+        const current = sbClients.find(c => c.id === id);
+        await action.execute(async () => { await updateProfileSupabase(id, { tags: current.tags.filter(t => t !== tag) }); await refetchClients(); });
     }
 
     return (
         <div className="p-6 md:p-10 max-w-[1600px] mx-auto">
+            <DataState loading={sbClientsLoading || appsLoading || action.busy} error={clientsError || appointmentsError || action.error} retry={refetchClients} />
             <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
                     <span className="text-[10px] font-bold uppercase tracking-[1em] text-primary mb-3 block">Comunidade</span>
-                    <h1 className="font-display font-bold text-3xl md:text-5xl uppercase tracking-tighter">Clientes</h1>
+                    <h1 className="font-display font-bold text-2xl sm:text-3xl md:text-5xl uppercase tracking-tighter">Clientes</h1>
                 </div>
             </div>
 
@@ -139,9 +125,8 @@ export default function AdminClientes() {
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {clientes.map(c => {
-                        const clientApps = sbConfigured ? sbApps.filter(a => a.clienteId === c.id) : appointmentStore.getByClient(c.id);
+                        const clientApps = sbApps.filter(a => a.clienteId === c.id);
                         const concluidos = clientApps.filter(a => a.status === STATUS.CONCLUIDO || a.status === 'concluido').length;
-                        const faltas = clientApps.filter(a => a.status === STATUS.NAO_COMPARECEU || a.status === 'ausente').length;
                         return (
                             <div key={c.id} className={`bg-black aspect-[3/4] flex flex-col justify-between p-6 border transition-all hover:-translate-y-1 group ${c.blacklist ? 'border-red-500/20 hover:border-red-500/40 backdrop-blur-md' : c.favorito ? 'border-primary/20 hover:border-primary/40' : 'border-white/5 hover:border-white/20'}`}>
                                 <div>
@@ -192,8 +177,8 @@ export default function AdminClientes() {
 
             {/* Modal Detalhe — Painel Completo do Cliente */}
             {modal?.tipo === 'detalhe' && (() => {
-                const c = sbConfigured ? (sbClients.find(cl => cl.id === modal.cliente.id) || modal.cliente) : (clientStore.getById(modal.cliente.id) || modal.cliente);
-                const clientApps = sbConfigured ? sbApps.filter(a => a.clienteId === c.id) : appointmentStore.getByClient(c.id);
+                const c = sbClients.find(cl => cl.id === modal.cliente.id) || modal.cliente;
+                const clientApps = sbApps.filter(a => a.clienteId === c.id);
                 const totalAgs = clientApps.length;
                 const concluidosCount = clientApps.filter(a => a.status === 'concluido' || a.status === STATUS.CONCLUIDO).length;
                 const faltasCount = clientApps.filter(a => a.status === 'ausente' || a.status === STATUS.NAO_COMPARECEU).length;
@@ -224,7 +209,7 @@ export default function AdminClientes() {
                 const score = totalAgs > 0 ? Math.round(((concluidosCount) / Math.max(1, concluidosCount + faltasCount)) * 100) : 100;
 
                 return (
-                    <ModalOverlay onClose={() => setModal(null)}>
+                    <ModalOverlay onClose={() => setModal(null)}><DataState error={action.error} loading={action.busy} />
                         <div className="max-h-[85vh] overflow-y-auto -m-6 md:-m-8 p-6 md:p-8">
                             {/* ═══ BLOCO HERO — Foto + Nome ═══ */}
                             <div className="flex flex-col items-center text-center mb-8 pt-4">
@@ -377,7 +362,7 @@ export default function AdminClientes() {
 
                             {/* ═══ AÇÕES BOTOES ═══ */}
                             <div className="flex flex-col md:flex-row gap-4 mb-2">
-                                <button onClick={salvarEdicao} className="flex-1 bg-primary text-black py-4 font-display font-bold uppercase text-xs tracking-[0.3em] hover:bg-white hover:text-black transition-colors">
+                                <button disabled={action.busy} onClick={salvarEdicao} className="flex-1 bg-primary text-black py-4 font-display font-bold uppercase text-xs tracking-[0.3em] hover:bg-white hover:text-black transition-colors">
                                     Salvar Alterações
                                 </button>
                                 <button onClick={() => toggleFav(c.id)} className={`px-6 py-4 border text-xs font-display font-bold uppercase tracking-widest transition-colors flex items-center justify-center gap-2 ${c.favorito ? 'border-primary text-primary bg-primary/5 hover:bg-primary/10' : 'border-white/10 text-zinc-400 hover:text-white hover:border-white/30 bg-black'}`}>
@@ -402,13 +387,13 @@ export default function AdminClientes() {
 
             {/* Modal Blacklist */}
             {modal?.tipo === 'blacklist' && (
-                <ModalOverlay onClose={() => setModal(null)}>
+                <ModalOverlay onClose={() => setModal(null)}><DataState error={action.error} loading={action.busy} />
                     <h3 className="font-display font-bold text-2xl uppercase tracking-tighter mb-6 text-red-500 flex items-center gap-3">
                         <Ban size={24} /> Adicionar à Blacklist
                     </h3>
                     <p className="text-zinc-400 text-sm font-modern mb-6">Bloquear o cliente de realizar novos agendamentos online. Apenas admins poderão gerenciar o cliente.</p>
                     <textarea value={blMotivo} onChange={e => setBlMotivo(e.target.value)} placeholder="Descreva o motivo da restrição..." className="w-full bg-black border-b border-white/20 p-4 text-sm text-white font-modern focus:border-red-500 focus:outline-none h-32 resize-none mb-6 placeholder:text-zinc-600 transition-colors" />
-                    <button onClick={confirmarBlacklist} className="w-full bg-red-600 hover:bg-red-500 text-white py-4 font-display font-bold uppercase text-xs tracking-[0.3em] transition-colors">Confirmar Bloqueio</button>
+                    <button disabled={action.busy} onClick={confirmarBlacklist} className="w-full bg-red-600 hover:bg-red-500 text-white py-4 font-display font-bold uppercase text-xs tracking-[0.3em] transition-colors">Confirmar Bloqueio</button>
                 </ModalOverlay>
             )}
         </div>

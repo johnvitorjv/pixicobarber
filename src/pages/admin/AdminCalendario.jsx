@@ -1,10 +1,7 @@
 import { useState } from 'react';
-import appointmentStore from '../../stores/appointmentStore';
 import availabilityStore from '../../stores/availabilityStore';
-import clientStore from '../../stores/clientStore';
-import serviceStore from '../../stores/serviceStore';
+import DataState from '../../components/DataState';
 import { STATUS, STATUS_CONFIG } from '../../data/models';
-import { isSupabaseConfigured } from '../../lib/supabase';
 import { useSupabaseAppointments } from '../../hooks/useSupabase';
 import { useStoreSync } from '../../hooks/useStore';
 import {
@@ -18,19 +15,19 @@ const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julh
 
 function pad(n) { return String(n).padStart(2, '0'); }
 function toDateKey(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
-function formatDataCurta(d) { const [y, m, dd] = d.split('-'); return `${dd}/${m}`; }
+function formatDataCurta(d) { const [, m, dd] = d.split('-'); return `${dd}/${m}`; }
 
 export default function AdminCalendario() {
-    const storeTick = useStoreSync();
+    useStoreSync();
     const [visao, setVisao] = useState('semana');
     const [dataRef, setDataRef] = useState(new Date());
 
-    const sb = isSupabaseConfigured();
-    const { appointments: sbApps } = useSupabaseAppointments();
+    const { appointments: sbApps, loading, error, refetch } = useSupabaseAppointments();
 
     const config = availabilityStore.getConfig();
+    if (!config) return <DataState loading />;
     const disponibilidade = availabilityStore.getRange(60);
-    const todosAgendamentos = sb ? sbApps : appointmentStore.getAll();
+    const todosAgendamentos = sbApps;
 
     // ─── Navegação ───
     function navAnterior() {
@@ -70,12 +67,9 @@ export default function AdminCalendario() {
 
     // ─── Gerar slots de horário ───
     function getSlots() {
-        const [hI] = config.horarioInicio.split(':').map(Number);
-        const [hF] = config.horarioFim.split(':').map(Number);
         const slots = [];
-        for (let h = hI; h < hF; h++) {
-            slots.push(`${pad(h)}:00`);
-            slots.push(`${pad(h)}:30`);
+        for (let minute = timeToMinutes(config.horarioInicio); minute < timeToMinutes(config.horarioFim); minute += config.duracaoSlot) {
+            slots.push(pad(Math.floor(minute / 60)) + ':' + pad(minute % 60));
         }
         return slots;
     }
@@ -87,7 +81,7 @@ export default function AdminCalendario() {
             const agData = (a.data || '').slice(0, 10);
             return (
                 agData === dateKey &&
-                a.status !== STATUS.CANCELADO_CLIENTE &&
+                a.status !== STATUS.CANCELADO_CLIENTE && a.status !== STATUS.CANCELADO_ADMIN &&
                 a.status !== STATUS.REJEITADO
             );
         });
@@ -95,10 +89,8 @@ export default function AdminCalendario() {
 
     // Verificar se um slot está no horário de almoço
     function isAlmoco(slot) {
-        const [aI] = config.intervaloAlmoco.inicio.split(':').map(Number);
-        const [aF] = config.intervaloAlmoco.fim.split(':').map(Number);
-        const [h] = slot.split(':').map(Number);
-        return h >= aI && h < aF;
+        const minute = timeToMinutes(slot);
+        return minute >= timeToMinutes(config.intervaloAlmoco.inicio) && minute < timeToMinutes(config.intervaloAlmoco.fim);
     }
 
     // Verificar se um slot tem agendamento (cobre range temporal inteiro)
@@ -126,7 +118,6 @@ export default function AdminCalendario() {
     // Título da navegação
     function getTitulo() {
         if (visao === 'dia') {
-            const dk = toDateKey(dataRef);
             return `${DIAS_SEMANA_FULL[dataRef.getDay()]}, ${dataRef.getDate()} de ${MESES[dataRef.getMonth()]}`;
         }
         const primeiro = diasVisiveis[0];
@@ -139,10 +130,11 @@ export default function AdminCalendario() {
 
     return (
         <div className="p-6 md:p-10 max-w-[1600px] mx-auto">
+            <DataState loading={loading} error={error} retry={refetch} />
             {/* Header */}
             <div className="mb-12">
                 <span className="text-[10px] font-bold uppercase tracking-[1em] text-primary mb-3 block">Timeline</span>
-                <h1 className="font-display font-bold text-3xl md:text-5xl uppercase tracking-tighter">Calendário</h1>
+                <h1 className="font-display font-bold text-2xl sm:text-3xl md:text-5xl uppercase tracking-tighter">Calendário</h1>
             </div>
 
             {/* Controls */}
@@ -152,7 +144,7 @@ export default function AdminCalendario() {
                     <button onClick={navAnterior} className="p-3 border border-white/10 hover:border-primary/50 text-zinc-400 hover:text-white transition-all bg-black">
                         <ChevronLeft size={16} />
                     </button>
-                    <div className="flex flex-col items-center justify-center min-w-[200px]">
+                    <div className="flex flex-col items-center justify-center min-w-0 w-36 sm:w-52">
                         <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1">Período</span>
                         <h2 className="font-modern text-lg text-white">{getTitulo()}</h2>
                     </div>
@@ -161,7 +153,7 @@ export default function AdminCalendario() {
                     </button>
                 </div>
 
-                <div className="flex items-center gap-4 w-full md:w-auto">
+                <div className="flex flex-wrap items-center gap-4 w-full md:w-auto">
                     <button onClick={irHoje} className="px-6 py-3 border border-white/10 hover:border-primary/30 text-[10px] font-bold uppercase tracking-widest text-white hover:text-primary transition-all flex-1 md:flex-none text-center bg-black">
                         Mover p/ Hoje
                     </button>
@@ -250,7 +242,7 @@ export default function AdminCalendario() {
                                     );
                                 }
 
-                                if (almoco) {
+                                if (almoco && !ag) {
                                     return (
                                         <div key={`${dk}-${slot}`} className="border-b border-l border-white/5 p-1 bg-[#111]">
                                             <div className="h-full flex items-center justify-center">
@@ -261,7 +253,7 @@ export default function AdminCalendario() {
                                 }
 
                                 if (ag) {
-                                    const nomeCliente = sb ? (ag._clienteNome || 'Cliente') : (clientStore.getById(ag.clienteId)?.nome || 'Cliente');
+                                    const nomeCliente = (ag._clienteNome || 'Cliente');
                                     const sc = STATUS_CONFIG[ag.status];
                                     const isPendente = ag.status === STATUS.PENDENTE;
 
@@ -335,8 +327,8 @@ function DailyDetail({ dateKey, agendamentos, disponibilidade }) {
                     {agendamentos
                         .sort((a, b) => a.faixaInicio.localeCompare(b.faixaInicio))
                         .map(ag => {
-                            const nomeCliente = sb ? (ag._clienteNome || 'Cliente') : (clientStore.getById(ag.clienteId)?.nome || 'Cliente');
-                            const sobrenomeCliente = sb ? (ag._clienteSobrenome || '') : (clientStore.getById(ag.clienteId)?.sobrenome || '');
+                            const nomeCliente = (ag._clienteNome || 'Cliente');
+                            const sobrenomeCliente = (ag._clienteSobrenome || '');
                             const sc = STATUS_CONFIG[ag.status];
                             return (
                                 <div key={ag.id} className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 md:p-5 bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-colors group">
