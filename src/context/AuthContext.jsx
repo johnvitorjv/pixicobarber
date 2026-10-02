@@ -127,11 +127,12 @@ export function AuthProvider({ children }) {
         if (password.length < 8) throw new Error('Use pelo menos 8 caracteres.');
         const { error: updateError } = await supabase.auth.updateUser({ password });
         if (updateError) throw new Error(authMessage(updateError));
-        await logout(undefined, 'global');
+        try { await logout(undefined, 'global'); }
+        catch { const failure = new Error('Sua senha foi alterada, mas não foi possível encerrar as sessões. Reconecte e tente encerrar novamente.'); failure.passwordChanged = true; throw failure; }
     }
 
     return <AuthContext.Provider value={{ user, loading, error, recovery, loggingOut, completeLogout, isAuthenticated: !!user,
-        isAdmin: user?.role === 'admin', registrar, login, logout, refreshUser, recoverPassword, changePassword }}>
+        isAdmin: user?.role === 'admin', registrar, login, logout, refreshUser, recoverPassword, changePassword, finishRecovery: () => logout(undefined, 'global') }}>
         {children}
     </AuthContext.Provider>;
 }

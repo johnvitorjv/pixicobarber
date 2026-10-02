@@ -1,7 +1,7 @@
-import { validatePublicConfig } from './publicConfig';
+import { validatePublicConfig } from './publicConfig.js';
 import { createClient } from '@supabase/supabase-js';
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const publicKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL || '';
+const publicKey = import.meta.env?.VITE_SUPABASE_ANON_KEY || '';
 let client = null;
 try {
     validatePublicConfig(supabaseUrl, publicKey);

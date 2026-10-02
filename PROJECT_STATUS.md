@@ -112,7 +112,7 @@ observabilidade sem dados pessoais, acessibilidade completa e testes físicos An
 P3: refinamentos de textos e redução de imports legados sem alteração visual.
 
 Não existem push, lembretes cron, envio automático WhatsApp nem som automático de
-notificação. O controle de som sem implementação foi retirado. WhatsApp abre texto
+notificação. O controle de som sem implementação foi retirado. Falha de encerramento após troca de senha permite retry sem repetir alteração; gravação confirmada com releitura falha mantém sucesso e expõe erro de atualização. WhatsApp abre texto
 para o operador enviar. A agenda atende **um barbeiro**; multi-profissional exige
 evolução de schema e escopo, não apenas um filtro de frontend.
 
@@ -163,15 +163,15 @@ evolução de schema e escopo, não apenas um filtro de frontend.
 
 ## Validação
 
-- `npm run check`: lint sem erros, **28 testes** aprovados e build sem aviso de chunk
+- `npm run check`: lint sem erros, **29 testes** aprovados e build sem aviso de chunk
   grande na última execução. Inclui contatos/overrides e rollback de migration com conflito legado.
-- `npm run test:e2e`: 9/10 aprovados; ajustes de layout a 320 px em validação.
+- `npm run test:e2e`: 11 cenários aprovados; painel móvel a 320/390 px e rotas de cliente a 320 px aprovados. Teste adicional de flags em validação.
   Cadastro, login/logout, proteção, reserva/cancelamento, conflito, recuperação completa,
   erro de gravação e configurações estão cobertos.
 - `npm run test:pwa`: aprovado, com Chromium/build/SW reais, offline e caches.
 - SQL: roles/RLS, tentativas de fraude, notas privadas, exclusão, duração, bloqueios,
   limites, cancelamento, proposta, histórico e JSON inválido.
-- Audit final: zero vulnerabilidades. Verificação de secrets/grants e commits em andamento.
+- Audit final: zero vulnerabilidades. Bundle sem chave privilegiada detectada; somente .env.example versionado. Commits finais em andamento.
 - Nenhum comando remoto de mutação executado.
 
 ## Checklist até produção
@@ -196,9 +196,9 @@ evolução de schema e escopo, não apenas um filtro de frontend.
 
 ## Progresso
 
-92% estimados da etapa local; gates externos permanecem abertos. Percentuais se
-referem a entregas verificadas, não à duração exata. Estimativa restante: 8–15 min,
-revisável caso os testes revelem novos problemas. Não equivale a 92% de prontidão
+98% estimados da etapa local; gates externos permanecem abertos. Percentuais se
+referem a entregas verificadas, não à duração exata. Estimativa restante: 2–4 min,
+revisável caso os testes revelem novos problemas. Não equivale a 98% de prontidão
 produtiva. Nenhuma previsão de fim da homologação pode ser precisa sem acesso,
 dados reais e autorização. Roteiro completo: [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
 

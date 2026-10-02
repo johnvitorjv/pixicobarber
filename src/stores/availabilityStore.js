@@ -6,6 +6,7 @@ const overrides = createRemoteStore('day_overrides');
 const availabilityStore = {
     async load() { await Promise.all([rules.load(), overrides.load()]); },
     clear() { rules.clear(); overrides.clear(); },
+    getError() { return rules.getError() || overrides.getError(); },
     isReady() { return rules.isReady() && overrides.isReady(); },
     getConfig() { return rules.getAll()[0]?.data || null; },
     async saveConfig(config) {

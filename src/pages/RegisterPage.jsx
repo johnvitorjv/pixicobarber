@@ -118,7 +118,7 @@ export default function RegisterPage() {
                         {/* WhatsApp */}
                         <div>
                             <label className={labelClass}>WhatsApp *</label>
-                            <input type="tel" name="whatsapp" required autoComplete="tel" value={form.whatsapp} onChange={handleChange} className={inputClass} placeholder="(71) 99999-9999" />
+                            <input type="tel" name="whatsapp" maxLength={20} required autoComplete="tel" value={form.whatsapp} onChange={handleChange} className={inputClass} placeholder="(71) 99999-9999" />
                         </div>
 
                         {/* E-mail */}
