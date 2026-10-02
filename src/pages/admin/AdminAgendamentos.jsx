@@ -4,7 +4,7 @@ import DataState from '../../components/DataState';
 import { STATUS, STATUS_CONFIG, MOTIVOS_REJEICAO, FORMAS_PAGAMENTO } from '../../data/models';
 import { TEMPLATES, gerarLinkWhatsAppCliente } from '../../data/whatsappTemplates';
 import { useStoreSync } from '../../hooks/useStore';
-import { useSupabaseAppointments, updateAppointmentSupabase } from '../../hooks/useSupabase';
+import { useSupabaseAppointments, useSupabaseClients, updateAppointmentSupabase } from '../../hooks/useSupabase';
 import { Avatar } from '../../components/PhotoUpload';
 import {
     Search, Filter, Clock, CheckCircle, XCircle, MessageCircle, Eye,
@@ -37,6 +37,7 @@ export default function AdminAgendamentos() {
     // Supabase data
     const { appointments: sbAppointments, loading: sbLoading, error: queryError, refetch: refetchAppointments } = useSupabaseAppointments();
 
+    const { clients, loading: clientsLoading, error: clientsError, refetch: refetchClients } = useSupabaseClients();
     // Dados persistidos exclusivamente pelo Supabase.
     const agendamentos = (() => {
         let all = sbAppointments;
@@ -58,7 +59,7 @@ export default function AdminAgendamentos() {
 
     // Dados persistidos exclusivamente pelo Supabase.
     function getCliente(ag) {
-        return {
+        return clients.find(client => client.id === ag.clienteId) || {
                 nome: ag._clienteNome || 'Cliente',
                 sobrenome: ag._clienteSobrenome || '',
                 whatsapp: ag._clienteWhatsapp || '',
@@ -138,7 +139,7 @@ export default function AdminAgendamentos() {
 
     return (
         <div className="p-6 md:p-10 max-w-[1600px] mx-auto">
-            <DataState loading={sbLoading || action.busy} error={queryError || action.error} retry={refetchAppointments} />
+            <DataState loading={sbLoading || clientsLoading || action.busy} error={queryError || clientsError || action.error} retry={() => Promise.all([refetchAppointments(), refetchClients()])} />
             <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
                     <span className="text-[10px] font-bold uppercase tracking-[1em] text-primary mb-3 block">Gestão</span>
@@ -209,8 +210,8 @@ export default function AdminAgendamentos() {
                                                 <div className="flex flex-col">
                                                     <div className="flex items-center gap-2">
                                                         <span className="font-bold text-sm tracking-wide">{cliente?.apelido || cliente?.nome || '—'} {cliente?.sobrenome?.[0] || ''}</span>
-                                                        {cliente?.favorito && <Star size={10} className="text-primary fill-primary" />}
-                                                        {cliente?.blacklist && <Ban size={10} className="text-red-400" />}
+                                                        {cliente?.favorito && <Star role="img" aria-label="Cliente favorito" size={10} className="text-primary fill-primary" />}
+                                                        {cliente?.blacklist && <Ban role="img" aria-label="Cliente bloqueado" size={10} className="text-red-400" />}
                                                     </div>
                                                     {cliente?.whatsapp && (
                                                         <span className="block text-[10px] text-zinc-500 font-modern mt-0.5">{cliente.whatsapp}</span>

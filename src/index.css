@@ -113,3 +113,8 @@ html {
 .animate-pulse-dot {
   animation: pulse-dot 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
+
+/* Keep the existing desktop hero while fitting narrow phone screens. */
+@media (max-width: 639px) {
+  .hero-title { font-size: clamp(2.5rem, 15vw, 4rem); }
+}

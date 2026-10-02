@@ -224,7 +224,7 @@ function SobreSection() {
       <div className="absolute left-0 top-1/3 w-full h-px bg-white/5 -rotate-6" />
 
       <div className="max-w-[1600px] mx-auto px-6 md:px-8">
-        <div className="grid lg:grid-cols-2 gap-16 lg:gap-24 items-center">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-24 items-center">
           <div className="phil-image relative group">
             <div className="absolute inset-0 bg-primary/20 translate-x-4 translate-y-4 group-hover:translate-x-8 group-hover:translate-y-8 transition-transform duration-700 clip-diagonal" />
             <div className="relative aspect-[4/5] overflow-hidden clip-diagonal border border-white/10">
@@ -488,11 +488,11 @@ function ContatoSection() {
   }, []);
 
   return (
-    <section ref={sectionRef} className="py-32 md:py-48 px-6 md:px-8 lg:px-24 bg-black relative" id="contato">
+    <section ref={sectionRef} className="py-32 md:py-48 px-6 md:px-8 lg:px-24 bg-black relative overflow-hidden" id="contato">
       <div className="absolute left-1/2 top-0 -translate-x-1/2 w-px h-full bg-gradient-to-b from-primary/50 to-transparent hidden lg:block" />
 
       <div className="max-w-[1400px] mx-auto relative z-10">
-        <div className="grid lg:grid-cols-2 gap-16 lg:gap-32">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-32">
           <div className="contact-address space-y-16 md:space-y-24">
             <div>
               <h4 className="text-[9px] font-bold uppercase tracking-[1em] text-primary mb-12">Localização</h4>
