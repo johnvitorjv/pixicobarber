@@ -27,30 +27,6 @@
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
 
-    <!-- Service Worker Registration -->
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
-            .then(reg => {
-              // Auto-atualizar quando nova versão disponível
-              reg.addEventListener('updatefound', () => {
-                const newWorker = reg.installing;
-                if (newWorker) {
-                  newWorker.addEventListener('statechange', () => {
-                    if (newWorker.state === 'activated') {
-                      // Refresh suave se houver nova versão
-                      if (navigator.serviceWorker.controller) {
-                        console.log('[PWA] Nova versão disponível');
-                      }
-                    }
-                  });
-                }
-              });
-            })
-            .catch(err => console.warn('[PWA] SW registration failed:', err));
-        });
-      }
-    </script>
+
   </body>
 </html>

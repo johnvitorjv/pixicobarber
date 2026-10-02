@@ -4,43 +4,54 @@ import { X, Download, Share } from 'lucide-react';
 export default function InstallPrompt() {
     const [deferredPrompt, setDeferredPrompt] = useState(null);
     const [showBanner, setShowBanner] = useState(false);
-    const [isIOS, setIsIOS] = useState(false);
-    const [isStandalone, setIsStandalone] = useState(false);
+    const [isIOS] = useState(() => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+    const [isStandalone, setIsStandalone] = useState(() => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true);
+    const [updateWorker, setUpdateWorker] = useState(null);
 
     useEffect(() => {
         // Já está instalado como PWA?
         const standalone = window.matchMedia('(display-mode: standalone)').matches
             || window.navigator.standalone === true;
-        setIsStandalone(standalone);
         if (standalone) return;
 
         // Já foi dispensado?
-        const dismissed = localStorage.getItem('pwa-install-dismissed');
+        let dismissed;
+        try { dismissed = localStorage.getItem('pwa-install-dismissed'); } catch { /* Storage may be disabled. */ }
         if (dismissed) return;
 
         // Detectar iOS
         const ua = window.navigator.userAgent;
         const isiOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-        setIsIOS(isiOS);
 
+        let timer;
         if (isiOS) {
             // No iOS, mostrar guia de Add to Home Screen
             const inSafari = /Safari/.test(ua) && !/CriOS|FxiOS|Chrome/.test(ua);
             if (inSafari) {
-                setTimeout(() => setShowBanner(true), 3000);
+                timer = setTimeout(() => setShowBanner(true), 3000);
             }
-            return;
+            return () => clearTimeout(timer);
         }
 
         // Android / Desktop: capturar beforeinstallprompt
         const handler = (e) => {
             e.preventDefault();
             setDeferredPrompt(e);
-            setTimeout(() => setShowBanner(true), 2000);
+            timer = setTimeout(() => setShowBanner(true), 2000);
         };
 
         window.addEventListener('beforeinstallprompt', handler);
-        return () => window.removeEventListener('beforeinstallprompt', handler);
+        const installed = () => { setIsStandalone(true); setShowBanner(false); };
+        window.addEventListener('appinstalled', installed);
+        return () => { clearTimeout(timer); window.removeEventListener('beforeinstallprompt', handler); window.removeEventListener('appinstalled', installed); };
+    }, []);
+
+    useEffect(() => {
+        const update = e => setUpdateWorker(e.detail);
+        window.addEventListener('pixico-update', update);
+        let active = true;
+        if ('serviceWorker' in navigator) void navigator.serviceWorker.getRegistration().then(registration => { if (active && registration?.waiting) setUpdateWorker(registration.waiting); }).catch(() => {});
+        return () => { active = false; window.removeEventListener('pixico-update', update); };
     }, []);
 
     const handleInstall = async () => {
@@ -55,9 +66,10 @@ export default function InstallPrompt() {
 
     const handleDismiss = () => {
         setShowBanner(false);
-        localStorage.setItem('pwa-install-dismissed', Date.now().toString());
+        try { localStorage.setItem('pwa-install-dismissed', Date.now().toString()); } catch { /* Optional preference. */ }
     };
 
+    if (updateWorker) return <div role="status" className="fixed bottom-4 left-4 right-4 z-[120] bg-black border border-primary p-4 text-white text-center">Uma atualização está disponível. <button className="text-primary underline" onClick={() => { navigator.serviceWorker.addEventListener('controllerchange', () => window.location.reload(), { once: true }); updateWorker.postMessage({ type: 'SKIP_WAITING' }); }}>Atualizar agora</button></div>;
     if (!showBanner || isStandalone) return null;
 
     return (

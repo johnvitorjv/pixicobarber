@@ -1,16 +1,34 @@
-# React + Vite
+# PIXICO Barber
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Sistema React + Vite + Supabase para clientes e administração de uma barbearia.
+A identidade visual foi preservada; autenticação, agenda e dados administrativos
+agora dependem exclusivamente do Supabase.
 
-Currently, two official plugins are available:
+## Desenvolvimento local
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Requisitos: Node 22 ou 24 e npm. Execute `npm ci`, copie `.env.example` para
+`.env.local` e preencha somente a URL e a chave pública de um Supabase **de testes**.
+Execute `npm run dev`. Sem configuração, o site apresenta indisponibilidade:
+não existe administrador local, senha embutida ou reserva simulada.
 
-## React Compiler
+Para o banco novo de testes, consulte [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
+Nunca execute `schema.sql` sobre um banco existente ou publique sua baseline isolada.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Validação
 
-## Expanding the ESLint configuration
+- `npm run check`: lint, testes de regras/SQL e build.
+- `npx playwright install chromium`: navegador para os testes.
+- `npm run test:e2e`: fluxos no navegador com backend HTTP simulado localmente.
+- `npm run test:pwa`: build real, service worker e navegação offline no Chromium.
+- `npm audit --audit-level=high`: dependências.
+- `npm run build:production`: valida configuração pública e HTTPS antes do build.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Os testes SQL usam PostgreSQL descartável via PGlite. Não acessam Supabase remoto.
+O build comum permite ausência de configuração para testes; o build de produção
+exige configuração válida. Nenhum comando acima publica ou executa migrations remotas.
+
+## Documentação e estado
+
+[PROJECT_STATUS.md](PROJECT_STATUS.md) registra auditoria, prioridades, resultados,
+limitações e pendências. [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) descreve
+homologação, SQL, Auth e Cloudflare Pages. Publicação depende de autorização explícita.

@@ -112,7 +112,9 @@ observabilidade sem dados pessoais, acessibilidade completa e testes físicos An
 P3: refinamentos de textos e redução de imports legados sem alteração visual.
 
 Não existem push, lembretes cron, envio automático WhatsApp nem som automático de
-notificação. O controle de som sem implementação foi retirado. Falha de encerramento após troca de senha permite retry sem repetir alteração; gravação confirmada com releitura falha mantém sucesso e expõe erro de atualização. WhatsApp abre texto
+notificação. O controle de som sem implementação foi retirado. Falha de encerramento
+após troca de senha permite retry sem repetir a alteração; gravação confirmada com
+releitura falha mantém sucesso e expõe erro de atualização. WhatsApp abre texto
 para o operador enviar. A agenda atende **um barbeiro**; multi-profissional exige
 evolução de schema e escopo, não apenas um filtro de frontend.
 
@@ -152,7 +154,7 @@ evolução de schema e escopo, não apenas um filtro de frontend.
 | DATA | P1 | Clientes/imagens/tags/blacklist e contato/configuração | Implementado local |
 | FIN | P1 | Preço histórico, cobrança e despesas | Implementado/testado; backfill a revisar |
 | NOTIF | P1 | Notificações/trilha no servidor e leitura persistente | Implementado/testado local |
-| VALID | P1 | Build/lint/SQL/navegador e audit | Revisão final em andamento |
+| VALID | P1 | Build/lint/SQL/navegador e audit | Concluído local: 43 testes, lint/build e audit aprovados |
 | PWA | P1 | Cache seguro, offline e update | Offline e atualização testados em build real |
 | RELEASE | P1 | CI, headers, configuração e roteiro de rollout | Preparado; nada publicado |
 | DEPS | P1 | Dependências compatíveis com lock e audit | Atualizadas; audit com zero vulnerabilidades |
@@ -163,16 +165,29 @@ evolução de schema e escopo, não apenas um filtro de frontend.
 
 ## Validação
 
-- `npm run check`: lint sem erros, **29 testes** aprovados e build sem aviso de chunk
-  grande na última execução. Inclui contatos/overrides e rollback de migration com conflito legado.
-- `npm run test:e2e`: 11 cenários aprovados; painel móvel a 320/390 px e rotas de cliente a 320 px aprovados. Teste adicional de flags em validação.
-  Cadastro, login/logout, proteção, reserva/cancelamento, conflito, recuperação completa,
-  erro de gravação e configurações estão cobertos.
-- `npm run test:pwa`: aprovado, com Chromium/build/SW reais, offline e caches.
+- **43 testes distintos aprovados**: 29 testes Node/SQL, 12 cenários funcionais
+  Playwright e 2 cenários de PWA. Cadastro/login também passaram em 6 repetições
+  adicionais para verificar a coordenação da sessão.
+- `npm run check`: lint sem erros, 29 testes aprovados e build sem aviso de chunk
+  grande. Inclui contatos/overrides e rollback integral de migration com conflito legado.
+- `npm run test:e2e`: 12 cenários aprovados. Nove telas administrativas a 320/390 px
+  e rotas públicas/de cliente a 320 px, sem overflow ou erro de execução.
+  Cadastro, login/logout, proteção de role, reserva/cancelamento, conflito,
+  recuperação completa, erro de gravação, contato salvo e flags persistidas cobertos.
+  A recuperação com senha já alterada e logout falhando repete somente o encerramento.
+- `npm run test:pwa`: 2 cenários aprovados com Chromium/build/SW reais. Offline,
+  atualização e preservação de caches de outros aplicativos verificados. A versão
+  do SW deriva do conteúdo do build e dos assets estáticos.
 - SQL: roles/RLS, tentativas de fraude, notas privadas, exclusão, duração, bloqueios,
   limites, cancelamento, proposta, histórico e JSON inválido.
-- Audit final: zero vulnerabilidades. Bundle sem chave privilegiada detectada; somente .env.example versionado. Commits finais em andamento.
-- Nenhum comando remoto de mutação executado.
+- Build final: entrada 344,62 kB; Supabase 223,38 kB; home 138,38 kB.
+  `npm run build:production` sem configuração pública é rejeitado intencionalmente;
+  isso impede publicar um build sem conexão configurada.
+- `npm audit --audit-level=high`: zero vulnerabilidades.
+  Bundle sem chave privilegiada detectada; somente `.env.example` versionado.
+  `git diff --check` aprovado. Alterações organizadas em sete commits locais.
+- Nenhum comando remoto de mutação executado. Testes funcionais usam HTTP simulado
+  local; SQL usa banco descartável. As limitações de homologação permanecem explícitas.
 
 ## Checklist até produção
 
@@ -183,7 +198,7 @@ evolução de schema e escopo, não apenas um filtro de frontend.
 - [x] Validar duração/conflito/almoço/bloqueios/capacidade/status/preços em SQL local.
 - [x] Testar cadastro, login, recuperação, logout e falhas de reserva/gravação no navegador.
 - [x] Testar PWA offline/cache em build real.
-- [ ] Concluir revisão final 320 px, lint/build/testes/audit/secrets e commits locais.
+- [x] Concluir revisão final 320 px, lint/build/testes/audit/secrets e commits locais.
 - [ ] Autorizar acesso de homologação e executar preflight somente leitura no banco real.
 - [ ] Revisar admins, serviços, expediente, backfill e dados/policies reais.
 - [ ] Backup verificável e aplicar migration em staging, com autorização.
@@ -196,11 +211,13 @@ evolução de schema e escopo, não apenas um filtro de frontend.
 
 ## Progresso
 
-98% estimados da etapa local; gates externos permanecem abertos. Percentuais se
-referem a entregas verificadas, não à duração exata. Estimativa restante: 2–4 min,
-revisável caso os testes revelem novos problemas. Não equivale a 98% de prontidão
-produtiva. Nenhuma previsão de fim da homologação pode ser precisa sem acesso,
-dados reais e autorização. Roteiro completo: [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
+**100% da etapa local de auditoria e implementação P0/P1 concluída. Tempo restante
+nessa etapa: 0 minutos.** As correções preparadas e verificadas estão na cópia
+local indicada acima. Isso não representa 100% de prontidão produtiva: aplicação
+real da migration, configuração e homologação externa continuam necessárias.
+P2/P3 e gates externos permanecem registrados; não há previsão confiável para
+encerrá-los sem os dados, acessos e autorizações correspondentes.
+Roteiro completo: [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
 
 ## Referências
 
