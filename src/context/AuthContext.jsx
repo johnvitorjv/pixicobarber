@@ -1,266 +1,137 @@
-import { createContext, useContext, useState, useEffect } from 'react';
-import clientStore from '../stores/clientStore';
-import notificationStore from '../stores/notificationStore';
-import { NOTIF_TIPOS, NOTIF_NIVEIS } from '../data/models';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { updateProfileSupabase } from '../hooks/useSupabase';
-
-// ═══════════════════════════════════════════════
-// PIXICO BARBER — Contexto de Autenticação v3 (Híbrido Supabase/Local)
-// ═══════════════════════════════════════════════
-
-const AuthContext = createContext(null);
-const STORAGE_KEY = 'pixico_auth';
+import { AuthContext } from './auth';
+import { normalizeWhatsApp } from '../lib/contact';
+import { authMessage, profileToUser } from '../lib/authUtils';
 
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [recovery, setRecovery] = useState(false);
+    const [loggingOut, setLoggingOut] = useState(false);
+    const completeLogout = useCallback(() => setLoggingOut(false), []);
+    const generation = useRef(0);
+    const signingOut = useRef(false);
+    const currentUserId = useRef(null);
 
-    // Seed admin user na inicialização (somente local fallback)
-    useEffect(() => {
-        if (!isSupabaseConfigured()) {
-            clientStore.seedAdmin();
-        }
-    }, []);
-
-    // Monitorar estado de autenticação
-    useEffect(() => {
-        const loadSession = async () => {
-            if (isSupabaseConfigured()) {
-                // Fluxo Supabase
-                const { data: { session }, error } = await supabase.auth.getSession();
-                if (session?.user) {
-                    await fetchAndSetUserData(session.user);
-                } else {
-                    setUser(null);
-                }
-                setLoading(false);
-
-                // Listener para mudanças de auth no Supabase
-                const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-                    if (session?.user) {
-                        await fetchAndSetUserData(session.user);
-                    } else {
-                        setUser(null);
-                    }
-                    setLoading(false);
-                });
-
-                return () => subscription.unsubscribe();
-            } else {
-                // Fluxo LocalStorage (Fallback)
-                try {
-                    const stored = localStorage.getItem(STORAGE_KEY);
-                    if (stored) {
-                        const parsed = JSON.parse(stored);
-                        const fresh = clientStore.getById(parsed.id);
-                        if (fresh) {
-                            const { senha, ...safe } = fresh;
-                            setUser(safe);
-                        } else {
-                            localStorage.removeItem(STORAGE_KEY);
-                        }
-                    }
-                } catch (e) {
-                    localStorage.removeItem(STORAGE_KEY);
-                }
-                setLoading(false);
-            }
-        };
-
-        loadSession();
-    }, []);
-
-    // Persistir sessão local (Fallback)
-    useEffect(() => {
-        if (!isSupabaseConfigured()) {
-            if (user) {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
-            } else {
-                localStorage.removeItem(STORAGE_KEY);
-            }
-        }
-    }, [user]);
-
-    // Buscar dados estendidos do usuário (Supabase)
-    const fetchAndSetUserData = async (supabaseUser) => {
+    const invalidate = useCallback(() => { generation.current++; }, []);
+    const loadUser = useCallback(async (authUser) => {
+        const request = ++generation.current;
+        if (!authUser) { currentUserId.current = null; setUser(null); setLoading(false); return null; }
+        if (currentUserId.current !== authUser.id) setLoading(true);
         try {
-            const meta = supabaseUser.user_metadata || {};
-            const safeUser = {
-                id: supabaseUser.id,
-                email: supabaseUser.email,
-                nome: meta.nome || '',
-                sobrenome: meta.sobrenome || '',
-                whatsapp: meta.whatsapp || '',
-                fotoUrl: meta.fotoUrl || '',
-                role: meta.role || 'client',
-            };
-            setUser(safeUser);
+            const { data, error: queryError } = await supabase.from('profiles')
+                .select('id,nome,sobrenome,whatsapp,role,foto_url,nascimento,criado_em').eq('id', authUser.id).single();
+            if (queryError) throw queryError;
+            const safeUser = profileToUser(authUser, data);
+            if (request === generation.current) { currentUserId.current = safeUser.id; setUser(safeUser); setError(''); }
             return safeUser;
-        } catch (error) {
-            console.error('Erro ao buscar dados do usuário:', error);
-            setUser(null);
+        } catch {
+            if (request === generation.current) { currentUserId.current = null; setUser(null); setError('Não foi possível carregar seu perfil. Tente novamente.'); }
             return null;
+        } finally {
+            if (request === generation.current) setLoading(false);
         }
-    };
+    }, []);
 
-    // Cadastro
-    async function registrar(dados) {
-        if (isSupabaseConfigured()) {
-            try {
-                const { data, error } = await supabase.auth.signUp({
-                    email: dados.email,
-                    password: dados.senha,
-                    options: {
-                        data: {
-                            nome: dados.nome,
-                            sobrenome: dados.sobrenome,
-                            whatsapp: dados.whatsapp,
-                            fotoUrl: dados.fotoUrl || '',
-                            role: 'client'
-                        }
-                    }
-                });
-
-                if (error) throw error;
-
-                // Se há sessão (email confirmation desativado), setar user direto
-                if (data.session && data.user) {
-                    const safeUser = await fetchAndSetUserData(data.user);
-                    // Gravar foto no profiles (trigger pode não copiar user_metadata)
-                    if (dados.fotoUrl) {
-                        try {
-                            await updateProfileSupabase(data.user.id, { foto_url: dados.fotoUrl });
-                        } catch (e) { console.warn('Não foi possível salvar foto no profile:', e); }
-                    }
-                    return { success: true, user: safeUser };
-                }
-
-                // Se NÃO há sessão (email confirmation ativo)
-                if (data.user && !data.session) {
-                    // Mesmo assim tentar gravar foto no profiles
-                    if (dados.fotoUrl) {
-                        try {
-                            await updateProfileSupabase(data.user.id, { foto_url: dados.fotoUrl });
-                        } catch (e) { console.warn('Não foi possível salvar foto no profile:', e); }
-                    }
-                    return {
-                        success: false,
-                        error: 'Cadastro realizado! Verifique seu e-mail para confirmar a conta antes de fazer login.',
-                        needsConfirmation: true
-                    };
-                }
-
-                return { success: true, user: data.user };
-            } catch (error) {
-                return { success: false, error: error.message || 'Erro ao cadastrar.' };
-            }
-        } else {
-            // Fallback LocalStorage
-            const { nome, sobrenome, whatsapp, email, senha, nascimento, observacoes, fotoUrl } = dados;
-            const result = clientStore.create({ nome, sobrenome, whatsapp, email, senha, nascimento, observacoes, fotoUrl });
-            if (!result.success) return result;
-
-            const { senha: _, ...userSeguro } = result.user;
-            setUser(userSeguro);
-
-            notificationStore.create({
-                tipo: NOTIF_TIPOS.NOVO_USUARIO,
-                titulo: 'Novo cliente cadastrado',
-                mensagem: `${nome} ${sobrenome} se cadastrou no sistema.`,
-                destinatario: 'admin',
-                nivel: NOTIF_NIVEIS.INFO,
-            });
-
-            return { success: true, user: userSeguro };
+    useEffect(() => {
+        if (!isSupabaseConfigured()) {
+            queueMicrotask(() => { setError('Sistema indisponível: configuração de acesso ausente.'); setLoading(false); });
+            return;
         }
-    }
+        let active = true;
+        let authEventReceived = false;
+        let eventVersion = 0;
+        const timers = new Set();
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            authEventReceived = true;
+            const version = ++eventVersion;
+            if (!active) return;
+            // Supabase API calls must run outside the synchronous auth lock.
+            const timer = setTimeout(() => {
+                timers.delete(timer);
+                if (!active || version !== eventVersion) return;
+                if (event === 'PASSWORD_RECOVERY') setRecovery(true);
+                if (event === 'SIGNED_OUT' && signingOut.current) return;
+                if (event === 'SIGNED_OUT') setRecovery(false);
+                void loadUser(session?.user);
+            }, 0);
+            timers.add(timer);
+        });
+        supabase.auth.getSession().then(({ data, error: sessionError }) => {
+            if (!active || authEventReceived) return;
+            if (sessionError) { setError('Não foi possível restaurar a sessão.'); setLoading(false); }
+            else void loadUser(data.session?.user);
+        }).catch(() => { if (active) { setError('Não foi possível restaurar a sessão.'); setLoading(false); } });
+        return () => { active = false; invalidate(); timers.forEach(clearTimeout); subscription.unsubscribe(); };
+    }, [loadUser, invalidate]);
 
-    // Login
     async function login(email, senha) {
-        if (isSupabaseConfigured()) {
-            try {
-                const { data, error } = await supabase.auth.signInWithPassword({
-                    email: email.toLowerCase(),
-                    password: senha,
-                });
-                if (error) throw error;
+        if (!supabase) return { success: false, error: 'Acesso indisponível no momento.' };
+        const { data, error: loginError } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password: senha });
+        if (loginError) return { success: false, error: authMessage(loginError) };
+        const safeUser = await loadUser(data.user);
+        return safeUser ? { success: true, user: safeUser } : { success: false, error: 'Não foi possível carregar seu perfil. Tente entrar novamente.' };
+    }
 
-                // Setar user diretamente
-                if (data.user) {
-                    const safeUser = await fetchAndSetUserData(data.user);
-                    return { success: true, user: safeUser };
-                }
-                return { success: true, user: data.user };
-            } catch (error) {
-                // Mostrar erro REAL do Supabase para debug
-                const msg = error.message || '';
-                if (msg.includes('Email not confirmed')) {
-                    return { success: false, error: 'E-mail não confirmado. Verifique sua caixa de entrada.' };
-                }
-                if (msg.includes('Invalid login credentials')) {
-                    return { success: false, error: 'E-mail ou senha incorretos.' };
-                }
-                return { success: false, error: msg || 'Erro ao fazer login.' };
+    async function registrar(dados) {
+        if (!supabase) return { success: false, error: 'Cadastro indisponível no momento.' };
+        const { data, error: signupError } = await supabase.auth.signUp({
+            email: dados.email.trim().toLowerCase(), password: dados.senha,
+            options: { emailRedirectTo: window.location.origin + '/login', data: {
+                nome: dados.nome.trim(), sobrenome: dados.sobrenome.trim(),
+                whatsapp: normalizeWhatsApp(dados.whatsapp), nascimento: dados.nascimento || '',
+                observacoes: dados.observacoes?.trim() || '',
+            } },
+        });
+        if (signupError) return { success: false, error: authMessage(signupError) };
+        if (!data.session) return { success: true, needsConfirmation: true,
+            message: 'Verifique seu e-mail para confirmar a conta. Depois, faça login.' };
+        const safeUser = await loadUser(data.user);
+        return safeUser ? { success: true, user: safeUser } : { success: false, error: 'Conta criada. Faça login novamente para carregar o perfil.' };
+    }
+
+    async function logout(onSuccess, scope = 'local') {
+        signingOut.current = true; setLoggingOut(true);
+        let completed = false;
+        try {
+            if (supabase) {
+                const { error: logoutError } = await supabase.auth.signOut({ scope });
+                if (logoutError) throw new Error('Não foi possível sair. Tente novamente.');
             }
-        } else {
-            // Fallback LocalStorage
-            const allUsers = clientStore.getAllIncludingAdmin();
-            const found = allUsers.find(u => u.email === email.toLowerCase() && u.senha === senha);
-
-            if (!found) return { success: false, error: 'E-mail ou senha incorretos.' };
-
-            const { senha: _, ...userSeguro } = found;
-            setUser(userSeguro);
-            clientStore.update(found.id, { ultimaAtividade: new Date().toISOString() });
-            return { success: true, user: userSeguro };
-        }
+            // Navigate in the same update as clearing auth; guards must not win this race.
+            if (typeof onSuccess === 'function') onSuccess();
+            generation.current++; currentUserId.current = null; setUser(null); setRecovery(false); setError('');
+            completed = true;
+        } finally { signingOut.current = false; if (!completed || typeof onSuccess !== 'function') setLoggingOut(false); }
     }
 
-    // Logout
-    async function logout() {
-        if (isSupabaseConfigured()) {
-            await supabase.auth.signOut();
-        }
-        setUser(null);
-    }
-
-    // Refresh user data
     async function refreshUser() {
-        if (!user) return;
-        if (isSupabaseConfigured()) {
-            // Em supabase, atualizaríamos consultando a tabela profiles novamente
-        } else {
-            const fresh = clientStore.getById(user.id);
-            if (fresh) {
-                const { senha, ...safe } = fresh;
-                setUser(safe);
-            }
-        }
+        if (!supabase) return;
+        const { data, error: sessionError } = await supabase.auth.getUser();
+        if (sessionError) throw sessionError;
+        return loadUser(data.user);
     }
 
-    const value = {
-        user,
-        loading,
-        isAuthenticated: !!user,
-        isAdmin: user?.role === 'admin' || user?.email === 'admin@pixico.com',
-        registrar,
-        login,
-        logout,
-        refreshUser,
-    };
+    async function recoverPassword(email) {
+        if (!supabase) throw new Error('Recuperação indisponível no momento.');
+        const { error: recoveryError } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+            redirectTo: window.location.origin + '/recuperar-acesso',
+        });
+        if (recoveryError) throw new Error(authMessage(recoveryError));
+    }
 
-    return (
-        <AuthContext.Provider value={value}>
-            {children}
-        </AuthContext.Provider>
-    );
+    async function changePassword(password) {
+        if (!supabase) throw new Error('Recuperação indisponível no momento.');
+        if (password.length < 8) throw new Error('Use pelo menos 8 caracteres.');
+        const { error: updateError } = await supabase.auth.updateUser({ password });
+        if (updateError) throw new Error(authMessage(updateError));
+        await logout(undefined, 'global');
+    }
+
+    return <AuthContext.Provider value={{ user, loading, error, recovery, loggingOut, completeLogout, isAuthenticated: !!user,
+        isAdmin: user?.role === 'admin', registrar, login, logout, refreshUser, recoverPassword, changePassword }}>
+        {children}
+    </AuthContext.Provider>;
 }
-
-export function useAuth() {
-    const context = useContext(AuthContext);
-    if (!context) throw new Error('useAuth deve ser usado dentro de AuthProvider');
-    return context;
-}
-
-export default AuthContext;

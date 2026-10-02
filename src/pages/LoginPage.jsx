@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../context/auth';
 import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
 
 export default function LoginPage() {
     const navigate = useNavigate();
     const { login } = useAuth();
+    const location = useLocation();
     const [form, setForm] = useState({ email: '', senha: '' });
     const [showSenha, setShowSenha] = useState(false);
     const [erro, setErro] = useState('');
@@ -18,6 +19,7 @@ export default function LoginPage() {
 
     async function handleSubmit(e) {
         e.preventDefault();
+        if (loading) return;
         setLoading(true);
 
         if (!form.email || !form.senha) {
@@ -29,12 +31,12 @@ export default function LoginPage() {
         try {
             const result = await login(form.email, form.senha);
             if (result.success) {
-                const role = result.user?.role || result.user?.user_metadata?.role;
-                navigate(role === 'admin' || result.user?.email === 'admin@pixico.com' ? '/admin' : '/painel');
+                const role = result.user?.role;
+                navigate(role === 'admin' ? '/admin' : '/painel');
             } else {
                 setErro(result.error);
             }
-        } catch (err) {
+        } catch {
             setErro('Erro inesperado. Tente novamente.');
         }
         setLoading(false);
@@ -60,6 +62,7 @@ export default function LoginPage() {
                         <p className="text-zinc-500 font-modern text-[11px] uppercase tracking-widest mt-2 block">Acesse sua conta para gerenciar seus agendamentos.</p>
                     </div>
 
+                    {location.state?.message && <p role="status" className="text-green-400 mb-6">{location.state.message}</p>}
                     {/* Error */}
                     {erro && (
                         <div className="mb-6 p-4 bg-red-500/5 border-l-2 border-red-500 text-red-400 text-sm font-modern">
@@ -73,7 +76,7 @@ export default function LoginPage() {
                             <label className="text-[9px] font-bold uppercase tracking-[0.5em] text-zinc-500 mb-2 block">E-mail</label>
                             <input
                                 type="email"
-                                name="email"
+                                name="email" required autoComplete="email"
                                 value={form.email}
                                 onChange={handleChange}
                                 className="w-full bg-transparent border-b border-white/20 px-0 py-3 text-white font-modern focus:border-primary focus:outline-none transition-colors placeholder:text-zinc-700"
@@ -86,7 +89,7 @@ export default function LoginPage() {
                             <div className="relative">
                                 <input
                                     type={showSenha ? 'text' : 'password'}
-                                    name="senha"
+                                    name="senha" required autoComplete="current-password"
                                     value={form.senha}
                                     onChange={handleChange}
                                     className="w-full bg-transparent border-b border-white/20 px-0 py-3 text-white font-modern focus:border-primary focus:outline-none transition-colors pr-12 placeholder:text-zinc-700"
@@ -103,9 +106,9 @@ export default function LoginPage() {
                         </div>
 
                         <div className="flex justify-end">
-                            <button type="button" className="text-xs text-zinc-500 hover:text-primary transition-colors font-modern">
+                            <Link to="/recuperar-acesso" className="text-xs text-zinc-500 hover:text-primary transition-colors font-modern">
                                 Esqueci minha senha
-                            </button>
+                            </Link>
                         </div>
 
                         <button

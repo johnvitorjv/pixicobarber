@@ -1,36 +1,29 @@
-import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import appointmentStore from '../stores/appointmentStore';
+import { useAuth } from '../context/auth';
 import notificationStore from '../stores/notificationStore';
-import clientStore from '../stores/clientStore';
+import { useAction } from '../hooks/useAction';
+import DataState from '../components/DataState';
 import { STATUS_CONFIG } from '../data/models';
 import { useStoreSync } from '../hooks/useStore';
-import { isSupabaseConfigured } from '../lib/supabase';
-import { useSupabaseAppointments, updateAppointmentSupabase } from '../hooks/useSupabase';
+import { useSupabaseAppointments, updateAppointmentSupabase, updateProfileSupabase } from '../hooks/useSupabase';
 import { Avatar } from '../components/PhotoUpload';
 import PhotoUpload from '../components/PhotoUpload';
 import { Calendar, Plus, User, LogOut, Clock, ArrowUpRight, Bell } from 'lucide-react';
 
 export default function DashboardPage() {
-    const { user, logout } = useAuth();
+    const { user, logout, refreshUser } = useAuth();
     const navigate = useNavigate();
-    const storeTick = useStoreSync();
-    const sb = isSupabaseConfigured();
-    const { appointments: sbApps } = useSupabaseAppointments();
+    useStoreSync();
+    const action = useAction();
+    const { appointments: sbApps, loading, error, refetch } = useSupabaseAppointments();
 
-    // Agendamentos do cliente: Supabase (filtra por clienteId) ou localStorage
-    const agendamentos = sb
-        ? sbApps.filter(a => a.clienteId === user?.id)
-        : appointmentStore.getByClient(user?.id);
+    // Apenas os agendamentos autorizados pelo banco para este cliente.
+    const agendamentos = sbApps.filter(a => a.clienteId === user?.id);
     const proximos = agendamentos.filter(a => ['pendente', 'confirmado', 'aguardando_cliente', 'remarcado'].includes(a.status));
-    const historico = agendamentos.filter(a => ['concluido', 'cancelado_cliente', 'rejeitado', 'ausente'].includes(a.status));
+    const historico = agendamentos.filter(a => ['concluido', 'cancelado_cliente', 'cancelado_admin', 'rejeitado', 'ausente'].includes(a.status));
     const notifs = notificationStore.getNaoLidasCliente(user?.id);
 
-    function handleLogout() {
-        logout();
-        navigate('/');
-    }
+    async function handleLogout() { await action.execute(() => logout(() => navigate('/', { replace: true }))); }
 
     function formatData(dataStr) {
         const [y, m, d] = dataStr.split('-');
@@ -38,14 +31,10 @@ export default function DashboardPage() {
     }
 
     async function cancelarAgendamento(agId) {
-        if (sb) {
-            try {
-                await updateAppointmentSupabase(agId, { status: 'cancelado_cliente' });
-            } catch (err) { console.error('Erro ao cancelar:', err); }
-        } else {
-            appointmentStore.cancelarPeloCliente(agId, user.id);
-        }
-        navigate('/painel');
+        await action.execute(async () => { await updateAppointmentSupabase(agId, { status: 'cancelado_cliente' }); await refetch(); }, 'Agendamento cancelado.');
+    }
+    async function aceitarProposta(id) {
+        await action.execute(async () => { await updateAppointmentSupabase(id, { status: 'confirmado' }); await refetch(); }, 'Novo horário confirmado.');
     }
 
     return (
@@ -53,7 +42,7 @@ export default function DashboardPage() {
             {/* Header */}
             <div className="border-b border-white/5 bg-black/80 backdrop-blur-xl sticky top-0 z-50">
                 <div className="max-w-6xl mx-auto px-6 py-6 flex items-center justify-between">
-                    <Link to="/" className="font-display font-bold text-2xl uppercase tracking-tighter hover:text-primary transition-colors">Pixico</Link>
+                    <Link to="/" className="font-display font-bold text-xl sm:text-2xl uppercase tracking-tighter hover:text-primary transition-colors">Pixico</Link>
                     <div className="flex items-center gap-8">
                         {notifs.length > 0 && (
                             <Link to="/painel" className="flex items-center gap-2 text-primary text-[10px] font-bold uppercase tracking-widest hover:text-white transition-colors">
@@ -72,12 +61,14 @@ export default function DashboardPage() {
             </div>
 
             <div className="max-w-6xl mx-auto px-6 py-12 md:py-20">
+                <DataState loading={loading || action.busy} error={error || action.error} retry={refetch} />
+                {action.message && <p role="status" className="text-green-400 mb-6">{action.message}</p>}
                 {/* Welcome */}
                 <div className="mb-16 flex flex-col md:flex-row md:items-center gap-8 border-b border-white/5 pb-16">
                     <Avatar src={user?.photoUrl || user?.fotoUrl || ''} initials={(user?.nome?.[0] || '') + (user?.sobrenome?.[0] || '')} size="lg" className="w-24 h-24" />
                     <div>
                         <span className="text-[10px] font-bold uppercase tracking-[1em] text-primary mb-4 block">Central do Cliente</span>
-                        <h1 className="font-display font-bold text-4xl md:text-5xl uppercase tracking-tighter text-white">
+                        <h1 className="font-display font-bold text-3xl sm:text-4xl md:text-5xl uppercase tracking-tighter text-white break-words">
                             Olá, {user?.nome}
                         </h1>
                         <p className="text-zinc-500 font-modern text-sm uppercase tracking-widest mt-4">Navegue pelos seus agendamentos e histórico.</p>
@@ -94,7 +85,7 @@ export default function DashboardPage() {
                                     <span className="font-display font-bold text-white uppercase tracking-wider text-sm block mb-1">{n.titulo}</span>
                                     <span className="font-modern text-sm text-zinc-400 block">{n.mensagem}</span>
                                 </div>
-                                <button onClick={() => { notificationStore.marcarLida(n.id); navigate('/painel'); }}
+                                <button onClick={() => action.execute(() => notificationStore.marcarLida(n.id))}
                                     className="text-zinc-600 group-hover:text-primary border border-transparent group-hover:border-primary/20 px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-all ml-auto shrink-0">Lida</button>
                             </div>
                         ))}
@@ -111,7 +102,7 @@ export default function DashboardPage() {
                             <Plus size={32} className="mb-6" strokeWidth={1.5} />
                             <ArrowUpRight size={24} className="group-hover:rotate-45 transition-transform" />
                         </div>
-                        <span className="font-display font-bold uppercase text-lg tracking-widest">Novo<br />Agendamento</span>
+                        <span className="font-display font-bold uppercase text-base sm:text-lg tracking-widest">Novo<br />Agendamento</span>
                     </Link>
 
                     <div className="bg-black border border-white/5 p-8 md:p-10 flex flex-col justify-between min-h-[200px]">
@@ -133,7 +124,7 @@ export default function DashboardPage() {
 
                 {/* Próximos Agendamentos */}
                 <div className="mb-20">
-                    <h2 className="font-display font-bold text-2xl uppercase tracking-tighter mb-8 flex items-center gap-4 text-white">
+                    <h2 className="font-display font-bold text-xl sm:text-2xl uppercase tracking-tighter mb-8 flex items-center gap-4 text-white">
                         <div className="w-1 h-5 bg-primary" /> Próximos Agendamentos
                     </h2>
 
@@ -166,8 +157,9 @@ export default function DashboardPage() {
                                             <span className={`px-4 py-2 border text-[10px] font-bold uppercase tracking-widest ${status.cor} ${status.bord}`}>
                                                 {status.label}
                                             </span>
-                                            {(ag.status === 'pendente' || ag.status === 'confirmado') && (
-                                                <button onClick={() => cancelarAgendamento(ag.id)}
+                                            {ag.status === 'aguardando_cliente' && ag.sugestaoNovaData && <button disabled={action.busy} onClick={() => aceitarProposta(ag.id)} className="text-primary text-xs">Aceitar {formatData(ag.sugestaoNovaData)} {ag.sugestaoNovaFaixa}</button>}
+                                            {['pendente','confirmado','remarcado','aguardando_cliente'].includes(ag.status) && (
+                                                <button disabled={action.busy} onClick={() => cancelarAgendamento(ag.id)}
                                                     className="text-red-500/50 hover:text-red-400 text-[10px] font-bold uppercase tracking-widest transition-colors border-b border-transparent hover:border-red-400/30 pb-0.5">
                                                     Cancelar
                                                 </button>
@@ -205,21 +197,21 @@ export default function DashboardPage() {
 
                 {/* Dados do Perfil */}
                 <div className="border-t border-white/5 pt-20">
-                    <h2 className="font-display font-bold text-2xl uppercase tracking-tighter mb-8 flex items-center gap-4 text-white">
+                    <h2 className="font-display font-bold text-xl sm:text-2xl uppercase tracking-tighter mb-8 flex items-center gap-4 text-white">
                         <div className="w-1 h-5 bg-primary" /> Meus Dados
                     </h2>
 
                     <div className="bg-black border border-white/5 p-8 md:p-12">
                         {/* Foto de perfil */}
-                        <div className="flex items-center gap-8 mb-12 pb-12 border-b border-white/5">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-8 mb-12 pb-12 border-b border-white/5">
                             <div className="relative group cursor-pointer w-fit">
                                 <PhotoUpload
-                                    value={clientStore.getById(user?.id)?.fotoUrl || ''}
-                                    onChange={(newFoto) => clientStore.update(user?.id, { fotoUrl: newFoto })}
+                                    value={user?.fotoUrl || ''}
+                                    onChange={(newFoto) => action.execute(async () => { await updateProfileSupabase(user.id, { foto_url: newFoto }); await refreshUser(); }, 'Foto atualizada.')}
                                     initials={(user?.nome?.[0] || '') + (user?.sobrenome?.[0] || '')}
                                     size="lg"
                                 />
-                                <div className="absolute inset-0 bg-black/50 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-full">
+                                <div className="pointer-events-none absolute inset-0 bg-black/50 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-full">
                                     <span className="text-[9px] font-bold uppercase tracking-widest text-white">Trocar</span>
                                 </div>
                             </div>

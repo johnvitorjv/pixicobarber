@@ -3,7 +3,7 @@ import { Camera, X, Image as ImageIcon } from 'lucide-react';
 
 // ═══════════════════════════════════════════════
 // PIXICO BARBER — Componente de Upload de Foto Premium
-// Converte imagem em base64 e armazena no localStorage
+// Dados persistidos exclusivamente pelo Supabase.
 // ═══════════════════════════════════════════════
 
 const MAX_SIZE_MB = 2;
@@ -19,7 +19,7 @@ const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
  * @param {string} size - 'sm' | 'md' | 'lg'
  */
 export default function PhotoUpload({ value, onChange, initials = '', required = false, error = '', size = 'md' }) {
-    const [preview, setPreview] = useState(value || '');
+    const preview = value || '';
     const [fileError, setFileError] = useState('');
     const [dragging, setDragging] = useState(false);
     const inputRef = useRef(null);
@@ -46,9 +46,12 @@ export default function PhotoUpload({ value, onChange, initials = '', required =
 
         // Redimensionar e converter para base64
         const reader = new FileReader();
+        reader.onerror = () => setFileError('Não foi possível ler a imagem.');
         reader.onload = (e) => {
             const img = new window.Image();
+            img.onerror = () => setFileError('Imagem inválida ou corrompida.');
             img.onload = () => {
+                if (!img.width || !img.height || Math.max(img.width, img.height) > 12000) { setFileError('Use uma imagem com até 12.000 pixels por lado.'); return; }
                 const canvas = document.createElement('canvas');
                 const MAX = 300;
                 let w = img.width, h = img.height;
@@ -59,7 +62,6 @@ export default function PhotoUpload({ value, onChange, initials = '', required =
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, w, h);
                 const base64 = canvas.toDataURL('image/jpeg', 0.8);
-                setPreview(base64);
                 onChange(base64);
             };
             img.src = e.target.result;
@@ -81,7 +83,6 @@ export default function PhotoUpload({ value, onChange, initials = '', required =
 
     function handleRemove(e) {
         e.stopPropagation();
-        setPreview('');
         onChange('');
         if (inputRef.current) inputRef.current.value = '';
     }
@@ -96,7 +97,7 @@ export default function PhotoUpload({ value, onChange, initials = '', required =
                             preview ? 'border-primary/30 hover:border-primary' :
                                 'border-white/10 hover:border-primary/50'
                     }`}
-                onClick={() => inputRef.current?.click()}
+                role="button" tabIndex={0} aria-label="Adicionar ou trocar foto" onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); inputRef.current?.click(); } }} onClick={() => inputRef.current?.click()}
                 onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
                 onDragLeave={() => setDragging(false)}
                 onDrop={handleDrop}
@@ -109,8 +110,8 @@ export default function PhotoUpload({ value, onChange, initials = '', required =
                         </div>
                         <button
                             type="button"
-                            onClick={handleRemove}
-                            className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                            aria-label="Remover foto" onClick={handleRemove}
+                            className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10"
                         >
                             <X size={10} />
                         </button>

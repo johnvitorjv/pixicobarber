@@ -1,15 +1,14 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import serviceStore from '../stores/serviceStore';
+import { useState, useRef } from 'react';
+import { gerarLinkWhatsApp } from '../data/whatsappTemplates';
+import { Link } from 'react-router-dom';
+import { useAuth } from '../context/auth';
 
 function formatPreco(v) { return `R$ ${Number(v || 0).toFixed(0)}`; }
 import availabilityStore from '../stores/availabilityStore';
-import appointmentStore from '../stores/appointmentStore';
-import notificationStore from '../stores/notificationStore';
-import { isSupabaseConfigured } from '../lib/supabase';
 import { createAppointmentSupabase, useSupabaseServices } from '../hooks/useSupabase';
-import { NOTIF_TIPOS, NOTIF_NIVEIS } from '../data/models';
+import { useSlots } from '../hooks/useSlots';
+import { bahiaDate, calendarDate, mutationMessage } from '../lib/bookingRules';
+import DataState from '../components/DataState';
 import { useStoreSync } from '../hooks/useStore';
 import { ArrowLeft, Lock, Check, ChevronLeft, ChevronRight, MessageCircle, ArrowUpRight } from 'lucide-react';
 
@@ -17,7 +16,6 @@ const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
 export default function BookingPage() {
-    const navigate = useNavigate();
     const { user, isAuthenticated } = useAuth();
 
     const [step, setStep] = useState(1); // 1=serviço, 2=data, 3=horário, 4=confirmação, 5=concluído
@@ -25,18 +23,21 @@ export default function BookingPage() {
     const [dataSelecionada, setDataSelecionada] = useState(null);
     const [faixaSelecionada, setFaixaSelecionada] = useState(null);
     const [observacao, setObservacao] = useState('');
-    const [mesAtual, setMesAtual] = useState(new Date());
+    const [mesAtual, setMesAtual] = useState(new Date(bahiaDate() + 'T12:00:00'));
 
-    const storeTick = useStoreSync();
+    useStoreSync();
     const disponibilidade = availabilityStore.getRange(60);
 
-    // Serviços: Supabase quando configurado, localStorage como fallback
-    const sbConfigured = isSupabaseConfigured();
-    const { services: sbServices, loading: sbServicesLoading, getById: sbGetById, getVisiveis: sbGetVisiveis } = useSupabaseServices();
+    // Dados persistidos exclusivamente pelo Supabase.
+    const { loading: sbServicesLoading, error: servicesError, refetch: refetchServices, getById: sbGetById, getVisiveis: sbGetVisiveis } = useSupabaseServices();
 
-    const servicosVisiveis = sbConfigured ? sbGetVisiveis('agendamento') : serviceStore.getVisiveis('agendamento');
-    const getServicoById = (id) => sbConfigured ? sbGetById(id) : serviceStore.getById(id);
+    const servicosVisiveis = sbGetVisiveis('agendamento');
+    const getServicoById = (id) => sbGetById(id);
     const servicoSelecionado = getServicoById(servicoId);
+    const { slots, loading: slotsLoading, error: slotsError, refetch: refetchSlots } = useSlots(dataSelecionada, servicoId);
+    const [confirming, setConfirming] = useState(false);
+    const [error, setError] = useState('');
+    const submitting = useRef(false);
 
     // Redirecionar para login se não autenticado
     if (!isAuthenticated) {
@@ -64,16 +65,14 @@ export default function BookingPage() {
         const mes = mesAtual.getMonth();
         const primeiroDia = new Date(ano, mes, 1).getDay();
         const totalDias = new Date(ano, mes + 1, 0).getDate();
-        const hoje = new Date();
-        hoje.setHours(0, 0, 0, 0);
         const dias = [];
 
         for (let i = 0; i < primeiroDia; i++) dias.push(null);
 
         for (let d = 1; d <= totalDias; d++) {
             const data = new Date(ano, mes, d);
-            const chave = data.toISOString().split('T')[0];
-            const passado = data < hoje;
+            const chave = calendarDate(data);
+            const passado = chave < bahiaDate();
             const info = disponibilidade[chave];
 
             dias.push({
@@ -90,49 +89,18 @@ export default function BookingPage() {
     }
 
     async function handleConfirmar() {
-        const servico = getServicoById(servicoId);
-        const faixaInfo = disponibilidade[dataSelecionada]?.faixas?.find(f => f.id === faixaSelecionada);
-
-        if (isSupabaseConfigured()) {
-            try {
-                await createAppointmentSupabase({
-                    clienteId: user.id,
-                    servicoId,
-                    data: dataSelecionada,
-                    faixaInicio: faixaInfo.inicio,
-                    faixaFim: faixaInfo.fim,
-                    observacaoCliente: observacao,
-                });
-            } catch (err) {
-                console.error('Erro ao criar agendamento no Supabase:', err);
-                alert('Erro ao agendar. Tente novamente.');
-                return;
-            }
-        } else {
-            appointmentStore.create({
-                clienteId: user.id,
-                servicoId,
-                servicoNome: servico.nome,
-                profissional: 'Pixico',
-                data: dataSelecionada,
-                faixaInicio: faixaInfo.inicio,
-                faixaFim: faixaInfo.fim,
-                observacaoCliente: observacao,
+        if (submitting.current) return;
+        const selected = slots.find(f => f.id === faixaSelecionada && f.disponivel);
+        if (!selected || !servicoSelecionado || slotsLoading) { setError('Verifique o horário e tente novamente.'); return; }
+        submitting.current = true; setConfirming(true); setError('');
+        try {
+            await createAppointmentSupabase({
+                clienteId: user.id, servicoId, data: dataSelecionada,
+                faixaInicio: selected.inicio, faixaFim: selected.fim, observacaoCliente: observacao,
             });
-
-            notificationStore.create({
-                tipo: NOTIF_TIPOS.NOVO_PEDIDO,
-                titulo: 'Novo agendamento!',
-                mensagem: `${user.nome} agendou ${servico.nome} para ${dataSelecionada} às ${faixaInfo.inicio}.`,
-                destinatario: 'admin',
-                nivel: NOTIF_NIVEIS.WARNING,
-            });
-        }
-
-        // Bloquear faixa usada
-        availabilityStore.blockSlot(dataSelecionada, faixaSelecionada);
-
-        setStep(5);
+            setStep(5);
+        } catch (err) { setError(mutationMessage(err)); await refetchSlots(); }
+        finally { submitting.current = false; setConfirming(false); }
     }
 
     function formatDataExibicao(dataStr) {
@@ -140,9 +108,9 @@ export default function BookingPage() {
         return `${d}/${m}/${y}`;
     }
 
-    const whatsappLink = `https://wa.me/5571994096863?text=${encodeURIComponent(
+    const whatsappLink = gerarLinkWhatsApp(
         `Olá! Acabei de agendar ${servicoSelecionado?.nome || 'um serviço'} para ${dataSelecionada ? formatDataExibicao(dataSelecionada) : ''}. Meu nome é ${user?.nome}.`
-    )}`;
+    );
 
     return (
         <div className="min-h-screen bg-background-dark">
@@ -157,6 +125,8 @@ export default function BookingPage() {
             </div>
 
             <div className="max-w-4xl mx-auto px-6 py-12 md:py-20">
+                <DataState loading={sbServicesLoading} error={servicesError} retry={refetchServices} />
+                <DataState error={error} />
                 {/* Progress */}
                 <div className="flex flex-wrap items-center gap-2 md:gap-4 mb-16 border-b border-white/5 pb-12">
                     {['Serviço', 'Data', 'Horário', 'Confirmar'].map((label, i) => (
@@ -179,7 +149,7 @@ export default function BookingPage() {
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                         <div className="mb-12">
                             <span className="text-[10px] font-bold uppercase tracking-[1em] text-primary mb-3 block">Passo 1</span>
-                            <h2 className="font-display font-bold text-3xl md:text-5xl uppercase tracking-tighter mb-4">Escolha o Serviço</h2>
+                            <h2 className="font-display font-bold text-2xl sm:text-3xl md:text-5xl uppercase tracking-tighter mb-4">Escolha o Serviço</h2>
                             <p className="text-zinc-500 font-modern text-sm uppercase tracking-widest">Nossos tratamentos exclusivos.</p>
                         </div>
 
@@ -196,7 +166,7 @@ export default function BookingPage() {
                                             <span className="font-display font-bold uppercase tracking-widest text-sm md:text-base block mb-2 text-white group-hover:text-primary transition-colors">{s.nome}</span>
                                             <span className="text-zinc-500 font-modern text-xs leading-relaxed line-clamp-2">{s.descricaoCurta}</span>
                                         </div>
-                                        <span className="font-display font-bold text-white text-xl md:text-2xl shrink-0 tabular-nums tracking-tighter">{formatPreco(s.preco)}</span>
+                                        <span className="font-display font-bold text-white text-xl md:text-2xl shrink-0 tabular-nums tracking-tighter">{formatPreco(s.precoPromocional ?? s.preco)}</span>
                                     </div>
                                     <div className="border-t border-white/5 pt-4 flex items-center justify-between">
                                         <span className="text-[9px] text-zinc-600 font-modern uppercase tracking-[0.3em]">
@@ -298,6 +268,7 @@ export default function BookingPage() {
                     </div>
                 )}
 
+                <DataState loading={slotsLoading} error={slotsError} retry={refetchSlots} />
                 {/* Step 3: Horário */}
                 {step === 3 && (
                     <div className="animate-in fade-in slide-in-from-right-8 duration-500">
@@ -312,10 +283,10 @@ export default function BookingPage() {
                         </div>
 
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                            {(disponibilidade[dataSelecionada]?.faixas || []).map(faixa => (
+                            {(slots || []).map(faixa => (
                                 <button
                                     key={faixa.id}
-                                    disabled={!faixa.disponivel}
+                                    disabled={!faixa.disponivel || slotsLoading || !!slotsError}
                                     onClick={() => { setFaixaSelecionada(faixa.id); setStep(4); }}
                                     className={`py-8 px-4 text-center font-display font-bold tracking-widest text-lg transition-all border ${!faixa.disponivel
                                         ? 'bg-white/[0.01] text-zinc-800 cursor-not-allowed border-white/5'
@@ -361,9 +332,9 @@ export default function BookingPage() {
                                 <div>
                                     <span className="text-[10px] font-bold uppercase tracking-[0.5em] text-zinc-600 block mb-3">Janela de Horário</span>
                                     <span className="font-display font-bold uppercase tracking-widest text-lg text-white">
-                                        {disponibilidade[dataSelecionada]?.faixas?.find(f => f.id === faixaSelecionada)?.inicio}
+                                        {slots?.find(f => f.id === faixaSelecionada)?.inicio}
                                         <span className="opacity-50 mx-2">—</span>
-                                        {disponibilidade[dataSelecionada]?.faixas?.find(f => f.id === faixaSelecionada)?.fim}
+                                        {slots?.find(f => f.id === faixaSelecionada)?.fim}
                                     </span>
                                 </div>
                             </div>
@@ -372,6 +343,7 @@ export default function BookingPage() {
                                 <label className="text-[10px] font-bold uppercase tracking-[0.5em] text-zinc-600 block mb-4">Observação Furtiva (Opcional)</label>
                                 <input
                                     type="text"
+                                    maxLength={2000}
                                     value={observacao}
                                     onChange={(e) => setObservacao(e.target.value)}
                                     className="w-full bg-white/[0.02] border border-white/10 px-6 py-5 text-white font-modern focus:border-primary focus:outline-none transition-colors"
@@ -382,6 +354,7 @@ export default function BookingPage() {
 
                         <button
                             onClick={handleConfirmar}
+                            disabled={confirming || slotsLoading || !!slotsError || !slots.some(f => f.id === faixaSelecionada && f.disponivel)}
                             className="w-full bg-primary text-black py-6 font-display font-bold uppercase tracking-[1em] text-xs hover:bg-white transition-colors"
                         >
                             Confirmar Solicitação

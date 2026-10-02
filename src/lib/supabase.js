@@ -1,16 +1,15 @@
+import { validatePublicConfig } from './publicConfig';
 import { createClient } from '@supabase/supabase-js';
-
-// Usaremos variáveis de ambiente do Vite no futuro.
-// Por enquanto, como o usuário não forneceu as chaves ainda,
-// vamos deixar preparado usando VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY
-// com fallback para string vazia para não quebrar o app.
-
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-
-export const supabase = supabaseUrl && supabaseAnonKey
-    ? createClient(supabaseUrl, supabaseAnonKey)
-    : null;
-
-// Função auxiliar para verificar se o Supabase está configurado
+const publicKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+let client = null;
+try {
+    validatePublicConfig(supabaseUrl, publicKey);
+    client = createClient(supabaseUrl, publicKey);
+} catch { /* Fail closed without exposing configuration. */ }
+export const supabase = client;
 export const isSupabaseConfigured = () => supabase !== null;
+export function requireSupabase() {
+    if (!supabase) throw new Error('Sistema indisponível no momento.');
+    return supabase;
+}

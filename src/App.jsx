@@ -3,11 +3,12 @@ import { Link } from 'react-router-dom';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { ArrowUpRight, Menu, X, Phone, MapPin } from 'lucide-react';
-import serviceStore from './stores/serviceStore';
-import { isSupabaseConfigured } from './lib/supabase';
 import { useSupabaseServices } from './hooks/useSupabase';
+import DataState from './components/DataState';
+import settingsStore from './stores/settingsStore';
 import { useStoreSync } from './hooks/useStore';
-import InstallPrompt from './components/InstallPrompt';
+import { gerarLinkWhatsApp } from './data/whatsappTemplates';
+function useContact() { useStoreSync(); const config = settingsStore.get(); return { ...config, whatsappLink: gerarLinkWhatsApp('Olá! Quero agendar um horário na ' + config.nomeNegocio + '.') }; }
 
 function formatPreco(v) { return `R$ ${Number(v || 0).toFixed(0)}`; }
 
@@ -354,11 +355,10 @@ function ServiceCard({ service, index }) {
    ───────────────────────────────────────────────── */
 function ServicosSection() {
   const sectionRef = useRef(null);
-  const sb = isSupabaseConfigured();
-  const { services: sbServices, getVisiveis } = useSupabaseServices();
+  const { loading, error, refetch, getVisiveis } = useSupabaseServices();
 
-  // Fonte de verdade: Supabase (se configurado) ou localStorage
-  const servicosVisiveis = sb ? getVisiveis('home') : serviceStore.getVisiveis('home');
+  // Dados persistidos exclusivamente pelo Supabase.
+  const servicosVisiveis = getVisiveis('home');
   const cards = getCardsServicos(servicosVisiveis);
 
   useEffect(() => {
@@ -386,6 +386,7 @@ function ServicosSection() {
           </div>
         </div>
 
+        <DataState loading={loading} error={error} retry={refetch} />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-0">
           {cards.map((service, i) => (
             <ServiceCard key={service.ref} service={service} index={i} />
@@ -464,8 +465,9 @@ function GaleriaSection() {
    CONTATO
    ───────────────────────────────────────────────── */
 function ContatoSection() {
+  const contact = useContact();
   const sectionRef = useRef(null);
-  const whatsappLink = "https://wa.me/5571994096863?text=Ol%C3%A1!%20Quero%20agendar%20um%20hor%C3%A1rio%20na%20Pixico%20Barber.";
+  const whatsappLink = contact.whatsappLink;
 
   useEffect(() => {
     const ctx = gsap.context(() => {
@@ -495,16 +497,16 @@ function ContatoSection() {
             <div>
               <h4 className="text-[9px] font-bold uppercase tracking-[1em] text-primary mb-12">Localização</h4>
               <p className="text-3xl md:text-4xl lg:text-6xl font-display font-bold uppercase leading-tight tracking-tightest">
-                R. Ten. Aragão,<br />121 — Itacaranha<br />Salvador — BA
+                {contact.endereco}
               </p>
             </div>
 
-            <div className="contact-info grid grid-cols-2 gap-12 pt-12 border-t border-white/10">
+            <div className="contact-info grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-12 pt-12 border-t border-white/10">
               <div>
                 <h4 className="text-[9px] font-bold uppercase tracking-[0.5em] text-zinc-500 mb-6">Contato</h4>
                 <div className="flex flex-col gap-3 font-modern text-lg">
-                  <a className="hover:text-primary transition-colors underline decoration-primary/30" href="https://wa.me/5571994096863" target="_blank" rel="noopener">
-                    (71) 99409-6863
+                  <a className="hover:text-primary transition-colors underline decoration-primary/30" href={contact.whatsappLink} target="_blank" rel="noopener">
+                    {contact.whatsappNumero}
                   </a>
                 </div>
               </div>
@@ -563,6 +565,7 @@ function ContatoSection() {
    RODAPÉ
    ───────────────────────────────────────────────── */
 function Rodape() {
+  const contact = useContact();
   return (
     <footer className="py-12 px-6 md:px-8 bg-black border-t border-white/5 overflow-hidden">
       <div className="max-w-[1600px] mx-auto">
@@ -592,14 +595,14 @@ function Rodape() {
           <div>
             <h4 className="text-[9px] font-bold uppercase tracking-[0.5em] text-zinc-600 mb-4">Contato</h4>
             <div className="flex flex-col gap-2 font-modern text-sm text-zinc-500">
-              <a href="https://wa.me/5571994096863" target="_blank" rel="noopener" className="hover:text-primary transition-colors">
-                WhatsApp: (71) 99409-6863
+              <a href={contact.whatsappLink} target="_blank" rel="noopener" className="hover:text-primary transition-colors">
+                WhatsApp: {contact.whatsappNumero}
               </a>
               <a href="https://www.instagram.com/pixicobarber02/" target="_blank" rel="noopener" className="hover:text-primary transition-colors">
                 @pixicobarber02
               </a>
               <span className="text-zinc-600">
-                R. Ten. Aragão, 121<br />Itacaranha, Salvador - BA
+                {contact.endereco}
               </span>
             </div>
           </div>
@@ -608,7 +611,7 @@ function Rodape() {
         {/* Bottom Row */}
         <div className="flex flex-col md:flex-row justify-between items-center gap-6">
           <span className="text-[9px] font-bold uppercase tracking-[0.5em] text-zinc-700">
-            © 2026 Pixico Barber. Todos os direitos reservados.
+            © {new Date().getFullYear()} {contact.nomeNegocio}. Todos os direitos reservados.
           </span>
           <div className="relative">
             <span className="text-outline font-display text-3xl md:text-4xl opacity-10 tracking-[1em]">PIXICO</span>
@@ -636,7 +639,6 @@ export default function App() {
       <GaleriaSection />
       <ContatoSection />
       <Rodape />
-      <InstallPrompt />
     </div>
   );
 }

@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import PhotoUpload from '../components/PhotoUpload';
+import { useAuth } from '../context/auth';
+import { bahiaDate } from '../lib/bookingRules';
+import { Avatar } from '../components/PhotoUpload';
 import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
 
 export default function RegisterPage() {
@@ -9,9 +10,8 @@ export default function RegisterPage() {
     const { registrar } = useAuth();
     const [showSenha, setShowSenha] = useState(false);
     const [erro, setErro] = useState('');
+    const [message, setMessage] = useState('');
     const [loading, setLoading] = useState(false);
-    const [fotoUrl, setFotoUrl] = useState('');
-    const [fotoErro, setFotoErro] = useState('');
     const [form, setForm] = useState({
         nome: '',
         sobrenome: '',
@@ -30,25 +30,19 @@ export default function RegisterPage() {
 
     async function handleSubmit(e) {
         e.preventDefault();
+        if (loading) return;
         setLoading(true);
-        setFotoErro('');
+        setMessage('');
 
         // Validações
-        if (!form.nome || !form.sobrenome || !form.whatsapp || !form.email || !form.senha) {
+        if (!form.nome.trim() || !form.sobrenome.trim() || !/^\d{10,13}$/.test(form.whatsapp.replace(/\D/g, '')) || !form.email.trim() || !form.senha) {
             setErro('Preencha todos os campos obrigatórios.');
             setLoading(false);
             return;
         }
 
-        if (!fotoUrl) {
-            setFotoErro('Foto de perfil é obrigatória.');
-            setErro('Adicione sua foto de perfil para continuar.');
-            setLoading(false);
-            return;
-        }
-
-        if (form.senha.length < 6) {
-            setErro('A senha deve ter pelo menos 6 caracteres.');
+        if (form.senha.length < 8) {
+            setErro('A senha deve ter pelo menos 8 caracteres.');
             setLoading(false);
             return;
         }
@@ -60,20 +54,15 @@ export default function RegisterPage() {
         }
 
         try {
-            const result = await registrar({ ...form, fotoUrl });
-            if (result.success) {
+            const result = await registrar(form);
+            if (result.needsConfirmation) {
+                setMessage(result.message);
+            } else if (result.success) {
                 navigate('/painel');
-            } else if (result.needsConfirmation) {
-                // Email confirmation está ativo — informar o usuário
-                setErro(result.error);
-                setLoading(false);
-                // Redirecionar para login após 3 segundos
-                setTimeout(() => navigate('/login'), 3000);
-                return;
             } else {
                 setErro(result.error);
             }
-        } catch (err) {
+        } catch {
             setErro('Erro inesperado. Tente novamente.');
         }
         setLoading(false);
@@ -100,6 +89,7 @@ export default function RegisterPage() {
                         <p className="text-zinc-500 font-modern text-sm">Cadastre-se para agendar seus horários na Pixico Barber.</p>
                     </div>
 
+                    {message && <p role="status" className="text-green-400 mb-6">{message} <Link to="/login" className="underline">Entrar</Link></p>}
                     {erro && (
                         <div className="mb-6 p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-modern">
                             {erro}
@@ -107,41 +97,34 @@ export default function RegisterPage() {
                     )}
 
                     <form onSubmit={handleSubmit} className="space-y-5">
-                        {/* Foto de perfil — obrigatória */}
-                        <div className="flex flex-col items-center mb-2">
-                            <label className={`${labelClass} text-center mb-3`}>Foto de perfil *</label>
-                            <PhotoUpload
-                                value={fotoUrl}
-                                onChange={(v) => { setFotoUrl(v); setFotoErro(''); setErro(''); }}
-                                initials={initials}
-                                required
-                                error={fotoErro}
-                                size="lg"
-                            />
+                        {/* Foto é adicionada após autenticação para não inflar metadados/JWT. */}
+                        <div className="flex flex-col items-center gap-3 mb-2">
+                            <Avatar initials={initials} size="lg" />
+                            <p className="text-xs text-zinc-500 text-center">Você poderá adicionar sua foto pelo painel após entrar.</p>
                         </div>
 
                         {/* Nome + Sobrenome */}
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <label className={labelClass}>Nome *</label>
-                                <input type="text" name="nome" value={form.nome} onChange={handleChange} className={inputClass} placeholder="Seu nome" />
+                                <input type="text" name="nome" required maxLength={100} autoComplete="given-name" value={form.nome} onChange={handleChange} className={inputClass} placeholder="Seu nome" />
                             </div>
                             <div>
                                 <label className={labelClass}>Sobrenome *</label>
-                                <input type="text" name="sobrenome" value={form.sobrenome} onChange={handleChange} className={inputClass} placeholder="Seu sobrenome" />
+                                <input type="text" name="sobrenome" required maxLength={100} autoComplete="family-name" value={form.sobrenome} onChange={handleChange} className={inputClass} placeholder="Seu sobrenome" />
                             </div>
                         </div>
 
                         {/* WhatsApp */}
                         <div>
                             <label className={labelClass}>WhatsApp *</label>
-                            <input type="tel" name="whatsapp" value={form.whatsapp} onChange={handleChange} className={inputClass} placeholder="(71) 99999-9999" />
+                            <input type="tel" name="whatsapp" required autoComplete="tel" value={form.whatsapp} onChange={handleChange} className={inputClass} placeholder="(71) 99999-9999" />
                         </div>
 
                         {/* E-mail */}
                         <div>
                             <label className={labelClass}>E-mail *</label>
-                            <input type="email" name="email" value={form.email} onChange={handleChange} className={inputClass} placeholder="seu@email.com" />
+                            <input type="email" name="email" required autoComplete="email" value={form.email} onChange={handleChange} className={inputClass} placeholder="seu@email.com" />
                         </div>
 
                         {/* Senha */}
@@ -151,11 +134,11 @@ export default function RegisterPage() {
                                 <div className="relative">
                                     <input
                                         type={showSenha ? 'text' : 'password'}
-                                        name="senha"
+                                        name="senha" required minLength={8} autoComplete="new-password"
                                         value={form.senha}
                                         onChange={handleChange}
                                         className={`${inputClass} pr-12`}
-                                        placeholder="Mín. 6 caracteres"
+                                        placeholder="Mín. 8 caracteres"
                                     />
                                     <button type="button" onClick={() => setShowSenha(!showSenha)} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-primary transition-colors">
                                         {showSenha ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -164,7 +147,7 @@ export default function RegisterPage() {
                             </div>
                             <div>
                                 <label className={labelClass}>Confirmar *</label>
-                                <input type={showSenha ? 'text' : 'password'} name="confirmarSenha" value={form.confirmarSenha} onChange={handleChange} className={inputClass} placeholder="Repita a senha" />
+                                <input type={showSenha ? 'text' : 'password'} name="confirmarSenha" required minLength={8} autoComplete="new-password" value={form.confirmarSenha} onChange={handleChange} className={inputClass} placeholder="Repita a senha" />
                             </div>
                         </div>
 
@@ -174,7 +157,7 @@ export default function RegisterPage() {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className={labelClass}>Nascimento</label>
-                                    <input type="date" name="nascimento" value={form.nascimento} onChange={handleChange} className={inputClass} />
+                                    <input type="date" max={bahiaDate()} name="nascimento" value={form.nascimento} onChange={handleChange} className={inputClass} />
                                 </div>
                                 <div>
                                     <label className={labelClass}>Observações</label>

@@ -1,63 +1,25 @@
-// ═══════════════════════════════════════════════
-// PIXICO BARBER — Notification Store
-// ═══════════════════════════════════════════════
-import { criarNotificacao } from '../data/models.js';
-
-const STORAGE_KEY = 'pixico_notifications';
-
-function load() {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
-    catch { return []; }
-}
-
-function save(data) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-}
-
+import { requireSupabase } from '../lib/supabase';
+import { createRemoteStore } from './remoteStore';
+const remote = createRemoteStore('notifications', n => ({ ...n, destinatario: n.para_admin ? 'admin' : n.destinatario, criadoEm: n.criado_em }));
 const notificationStore = {
-    getAll() { return load(); },
-
-    create(data) {
-        const items = load();
-        const notif = criarNotificacao(data);
-        items.unshift(notif);
-        save(items);
-        return notif;
-    },
-
-    marcarLida(id) {
-        const items = load();
-        const idx = items.findIndex(n => n.id === id);
-        if (idx === -1) return null;
-        items[idx].lida = true;
-        save(items);
-        return items[idx];
-    },
-
-    marcarTodasLidas(destinatario) {
-        const items = load();
-        items.forEach(n => {
-            if (n.destinatario === destinatario) n.lida = true;
-        });
-        save(items);
-    },
-
-    delete(id) {
-        save(load().filter(n => n.id !== id));
-    },
-
-    limparLidas(destinatario) {
-        save(load().filter(n => !(n.destinatario === destinatario && n.lida)));
-    },
-
-    // ─── Queries ───
-    getParaAdmin() { return load().filter(n => n.destinatario === 'admin'); },
-    getParaCliente(clienteId) { return load().filter(n => n.destinatario === clienteId); },
+    ...remote,
+    getParaAdmin() { return remote.getAll().filter(n => n.para_admin); },
+    getParaCliente(id) { return remote.getAll().filter(n => n.destinatario === id); },
     getNaoLidasAdmin() { return this.getParaAdmin().filter(n => !n.lida); },
-    getNaoLidasCliente(clienteId) { return this.getParaCliente(clienteId).filter(n => !n.lida); },
-
+    getNaoLidasCliente(id) { return this.getParaCliente(id).filter(n => !n.lida); },
     getContadorAdmin() { return this.getNaoLidasAdmin().length; },
-    getContadorCliente(clienteId) { return this.getNaoLidasCliente(clienteId).length; },
+    getContadorCliente(id) { return this.getNaoLidasCliente(id).length; },
+    async marcarLida(id) { await remote.write(requireSupabase().from('notifications').update({ lida: true }).eq('id', id).select().single()); },
+    async marcarTodasLidas(destinatario) {
+        let query = requireSupabase().from('notifications').update({ lida: true });
+        query = destinatario === 'admin' ? query.eq('para_admin', true) : query.eq('destinatario', destinatario);
+        await remote.write(query);
+    },
+    async limparLidas(destinatario) {
+        let query = requireSupabase().from('notifications').delete().eq('lida', true);
+        query = destinatario === 'admin' ? query.eq('para_admin', true) : query.eq('destinatario', destinatario);
+        await remote.write(query);
+    },
+    async delete(id) { await remote.write(requireSupabase().from('notifications').delete().eq('id', id)); },
 };
-
 export default notificationStore;

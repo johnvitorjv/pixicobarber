@@ -2,7 +2,8 @@
 // PIXICO BARBER — WhatsApp Templates
 // ═══════════════════════════════════════════════
 
-const WHATSAPP_NUMBER = '5571994096863';
+import { normalizeWhatsApp } from '../lib/contact';
+import settingsStore from '../stores/settingsStore';
 
 function formatData(dataStr) {
     if (!dataStr) return '';
@@ -37,10 +38,10 @@ export const TEMPLATES = {
 };
 
 export function gerarLinkWhatsApp(mensagem, numero) {
-    const tel = numero || WHATSAPP_NUMBER;
-    return `https://wa.me/${tel.replace(/\D/g, '')}?text=${encodeURIComponent(mensagem)}`;
+    const tel = numero || settingsStore.get().whatsappNumero;
+    return `https://wa.me/${normalizeWhatsApp(tel)}?text=${encodeURIComponent(mensagem)}`;
 }
 
 export function gerarLinkWhatsAppCliente(whatsappCliente, mensagem) {
-    return `https://wa.me/${whatsappCliente.replace(/\D/g, '')}?text=${encodeURIComponent(mensagem)}`;
+    return `https://wa.me/${normalizeWhatsApp(whatsappCliente)}?text=${encodeURIComponent(mensagem)}`;
 }

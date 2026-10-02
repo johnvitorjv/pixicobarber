@@ -1,63 +1,22 @@
-// ═══════════════════════════════════════════════
-// PIXICO BARBER — Settings Store
-// ═══════════════════════════════════════════════
-
-const STORAGE_KEY = 'pixico_settings';
-
-function getDefaults() {
-    return {
-        blacklistBehavior: 'approval', // 'block' | 'approval'
-        // 'block' = bloqueia totalmente novos pedidos
-        // 'approval' = permite pedido mas exige aprovação manual
-
-        whatsappNumero: '5571994096863',
-        nomeNegocio: 'PIXICO Barber',
-        endereco: 'Salvador — Itacaranha',
-
-        // Mensagens editáveis (override dos templates padrão)
-        templateOverrides: {},
-
-        // Notificações
-        notifSom: true,
-        notifEmail: false,
-    };
-}
-
-function load() {
-    try {
-        return { ...getDefaults(), ...(JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}) };
-    } catch { return getDefaults(); }
-}
-
-function save(data) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-}
-
+import { normalizeWhatsApp } from '../lib/contact';
+import { requireSupabase } from '../lib/supabase';
+import { createRemoteStore } from './remoteStore';
+const defaults = { nomeNegocio: 'PIXICO Barber', whatsappNumero: '5571994096863', endereco: 'R. Ten. Aragão, 121 — Itacaranha, Salvador — BA', blacklistBehavior: 'approval' };
+const remote = createRemoteStore('business_settings');
 const settingsStore = {
-    get() { return load(); },
-
-    update(updates) {
-        const current = load();
-        const updated = { ...current, ...updates };
-        save(updated);
-        return updated;
+    ...remote,
+    get() { return { ...defaults, ...remote.getAll()[0]?.data };  },
+    async update(updates) {
+        const data = { ...this.get(), ...updates };
+        data.nomeNegocio = data.nomeNegocio?.trim(); data.endereco = data.endereco?.trim();
+        data.whatsappNumero = normalizeWhatsApp(data.whatsappNumero);
+        if (!data.nomeNegocio || !data.endereco || !/^\d{10,15}$/.test(data.whatsappNumero || '')) throw new Error('Preencha o nome, endereço e WhatsApp com DDI e DDD.');
+        await remote.write(requireSupabase().from('business_settings').update({ data }).eq('id', true).select().single());
+        return data;
     },
-
-    getBlacklistBehavior() { return load().blacklistBehavior; },
-    setBlacklistBehavior(behavior) { return this.update({ blacklistBehavior: behavior }); },
-
-    getTemplateOverride(key) { return load().templateOverrides?.[key] || null; },
-    setTemplateOverride(key, template) {
-        const current = load();
-        current.templateOverrides = current.templateOverrides || {};
-        current.templateOverrides[key] = template;
-        save(current);
-    },
-
-    reset() {
-        save(getDefaults());
-        return getDefaults();
-    },
+    getBlacklistBehavior() { return this.get().blacklistBehavior; },
+    setBlacklistBehavior(blacklistBehavior) { return this.update({ blacklistBehavior }); },
+    getTemplateOverride(key) { return this.get().templateOverrides?.[key] || null; },
+    setTemplateOverride(key, value) { return this.update({ templateOverrides: { ...this.get().templateOverrides, [key]: value } }); },
 };
-
 export default settingsStore;
