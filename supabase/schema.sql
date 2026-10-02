@@ -1,3 +1,5 @@
+-- BASELINE HISTÓRICA: apenas banco novo DESCARTÁVEL, seguido imediatamente da migration.
+-- Inseguro para publicação isolada. Banco existente: somente migration após preflight e autorização.
 -- ═══════════════════════════════════════════════
 -- PIXICO BARBER - SUPABASE SCHEMA V1
 -- Cole este script no SQL Editor do Supabase e clique em RUN
