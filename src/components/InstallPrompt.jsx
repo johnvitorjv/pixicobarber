@@ -1,7 +1,16 @@
 import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { X, Download, Share } from 'lucide-react';
 
+const DISMISSED_KEY = 'pwa-install-dismissed';
+const INSTALLED_KEY = 'pwa-install-installed';
+
+function remember(key, value = Date.now().toString()) {
+    try { localStorage.setItem(key, value); } catch { /* Optional preference. */ }
+}
+
 export default function InstallPrompt() {
+    const location = useLocation();
     const [deferredPrompt, setDeferredPrompt] = useState(null);
     const [showBanner, setShowBanner] = useState(false);
     const [isIOS] = useState(() => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
@@ -15,9 +24,12 @@ export default function InstallPrompt() {
         if (standalone) return;
 
         // Já foi dispensado?
-        let dismissed;
-        try { dismissed = localStorage.getItem('pwa-install-dismissed'); } catch { /* Storage may be disabled. */ }
-        if (dismissed) return;
+        let dismissed, installedPreference;
+        try {
+            dismissed = localStorage.getItem(DISMISSED_KEY);
+            installedPreference = localStorage.getItem(INSTALLED_KEY);
+        } catch { /* Storage may be disabled. */ }
+        if (dismissed || installedPreference) return;
 
         // Detectar iOS
         const ua = window.navigator.userAgent;
@@ -41,7 +53,7 @@ export default function InstallPrompt() {
         };
 
         window.addEventListener('beforeinstallprompt', handler);
-        const installed = () => { setIsStandalone(true); setShowBanner(false); };
+        const installed = () => { remember(INSTALLED_KEY, '1'); setIsStandalone(true); setShowBanner(false); setDeferredPrompt(null); };
         window.addEventListener('appinstalled', installed);
         return () => { clearTimeout(timer); window.removeEventListener('beforeinstallprompt', handler); window.removeEventListener('appinstalled', installed); };
     }, []);
@@ -56,21 +68,27 @@ export default function InstallPrompt() {
 
     const handleInstall = async () => {
         if (!deferredPrompt) return;
-        deferredPrompt.prompt();
+        await deferredPrompt.prompt();
         const { outcome } = await deferredPrompt.userChoice;
-        if (outcome === 'accepted') {
-            setShowBanner(false);
-        }
+        if (outcome === 'accepted') remember(INSTALLED_KEY, '1');
+        else remember(DISMISSED_KEY);
+        setShowBanner(false);
         setDeferredPrompt(null);
     };
 
     const handleDismiss = () => {
         setShowBanner(false);
-        try { localStorage.setItem('pwa-install-dismissed', Date.now().toString()); } catch { /* Optional preference. */ }
+        remember(DISMISSED_KEY);
+    };
+
+    const handleIOSInstalled = () => {
+        remember(INSTALLED_KEY, '1');
+        setShowBanner(false);
     };
 
     if (updateWorker) return <div role="status" className="fixed bottom-4 left-4 right-4 z-[120] bg-black border border-primary p-4 text-white text-center">Uma atualização está disponível. <button className="text-primary underline" onClick={() => { navigator.serviceWorker.addEventListener('controllerchange', () => window.location.reload(), { once: true }); updateWorker.postMessage({ type: 'SKIP_WAITING' }); }}>Atualizar agora</button></div>;
-    if (!showBanner || isStandalone) return null;
+    const eligibleRoute = location.pathname === '/' || location.pathname === '/painel';
+    if (!showBanner || isStandalone || !eligibleRoute) return null;
 
     return (
         <div className="fixed bottom-0 left-0 right-0 z-[9999] p-4 animate-in slide-in-from-bottom-4 duration-500"
@@ -99,7 +117,14 @@ export default function InstallPrompt() {
 
                 {/* Ações */}
                 <div className="flex items-center gap-2 shrink-0">
-                    {!isIOS && (
+                    {isIOS ? (
+                        <button
+                            onClick={handleIOSInstalled}
+                            className="border border-primary/40 text-primary px-3 py-2 font-display font-bold uppercase text-[8px] tracking-[0.2em] hover:bg-primary hover:text-black transition-colors"
+                        >
+                            Já adicionei
+                        </button>
+                    ) : (
                         <button
                             onClick={handleInstall}
                             className="bg-primary text-black px-4 py-2 font-display font-bold uppercase text-[9px] tracking-[0.3em] hover:bg-white transition-colors"

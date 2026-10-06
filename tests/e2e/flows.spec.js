@@ -409,3 +409,32 @@ test('home images animate when they cross the mobile viewport center', async ({p
     await assertCenterAnimation(page.locator('.service-card img').first());
     await assertCenterAnimation(page.locator('.gallery-item img').first());
 });
+
+
+test('PWA install offer is one-time per browser after the user acts', async ({page}) => {
+    await page.setViewportSize({width:390,height:844});
+    await mockBackend(page);
+    await page.goto('/');
+
+    await page.evaluate(() => {
+        const event = new Event('beforeinstallprompt');
+        Object.defineProperty(event, 'prompt', { value: () => Promise.resolve() });
+        Object.defineProperty(event, 'userChoice', { value: Promise.resolve({ outcome: 'dismissed' }) });
+        window.dispatchEvent(event);
+    });
+
+    await expect(page.getByText('Instalar PIXICO',{exact:true})).toBeVisible({timeout:4000});
+    await page.getByRole('button',{name:'Instalar',exact:true}).click();
+    await expect(page.getByText('Instalar PIXICO',{exact:true})).toHaveCount(0);
+    await expect.poll(() => page.evaluate(() => Boolean(localStorage.getItem('pwa-install-dismissed')))).toBe(true);
+
+    await page.reload();
+    await page.evaluate(() => {
+        const event = new Event('beforeinstallprompt');
+        Object.defineProperty(event, 'prompt', { value: () => Promise.resolve() });
+        Object.defineProperty(event, 'userChoice', { value: Promise.resolve({ outcome: 'dismissed' }) });
+        window.dispatchEvent(event);
+    });
+    await page.waitForTimeout(2300);
+    await expect(page.getByText('Instalar PIXICO',{exact:true})).toHaveCount(0);
+});
