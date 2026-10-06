@@ -8,8 +8,8 @@
 - [x] Clientes/agendamentos históricos de teste removidos; admin PIXICO preservado.
 - [x] 18 serviços oficiais ativos/agendáveis; `Sobrancelha` legado inativo/oculto.
 - [x] PostgREST público validado no Supabase real e build de produção aprovado.
-- [ ] Ajustar Site URL/redirects do Supabase Auth para `https://pixicobarber.pages.dev`.
-- [ ] Publicar o novo frontend no Cloudflare Pages e executar smoke test final público.
+- [x] Site URL/redirects do Supabase Auth ajustados para `https://pixicobarber.pages.dev`, `/login` e `/recuperar-acesso`.
+- [x] Novo frontend publicado no Cloudflare Pages; smoke público HTTP 200 e bundle ligado ao Supabase correto.
 - [ ] Validar cadastro/login/recuperação de senha e um agendamento real de teste antes da inauguração.
 
 ## Gate local atualizado — 06/10/2026

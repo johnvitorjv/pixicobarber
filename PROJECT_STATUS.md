@@ -9,12 +9,11 @@
 - Catálogo de lançamento: 18 serviços ativos/agendáveis. Serviço legado `Sobrancelha` preservado, porém inativo e oculto.
 - PostgREST público validado contra o projeto real: catálogo, expediente e dados do negócio respondendo corretamente.
 - Build de produção com a URL/chave pública reais aprovado localmente.
-- Cloudflare Pages já contém configuração do mesmo Supabase no deploy atual; publicação do novo frontend ainda é o gate final.
-- Configuração Auth ainda requer troca do Site URL `localhost:3000` para `https://pixicobarber.pages.dev` e redirects exatos antes de validar recuperação de senha.
+- Novo frontend publicado no Cloudflare Pages a partir da `main`; smoke público retornou HTTP 200 nas rotas principal, login e recuperação, com CSP/headers novos ativos.
+- Supabase Auth configurado com Site URL `https://pixicobarber.pages.dev` e redirects exatos para `/login` e `/recuperar-acesso`.
 
-Atualizado em 06/10/2026, America/Bahia. Branch: `finalizacao-pixico`.
-Escopo autorizado: arquivos e commits locais. Nenhum push, deploy, alteração de
-Cloudflare ou execução de SQL remoto foi realizado.
+Atualizado em 06/10/2026, America/Bahia. Branch publicada: `main`.
+O bloco abaixo preserva o registro da etapa local anterior; o estado remoto atual está documentado acima.
 
 ## Finalização das regras confirmadas — 06/10/2026
 
