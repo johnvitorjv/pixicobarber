@@ -435,6 +435,7 @@ function ModalOverlay({ children, onClose }) {
             <div role="dialog" aria-modal="true" className="relative bg-black border border-white/10 p-8 w-full max-w-lg shadow-2xl z-10 my-auto">
                 <button
                     onClick={onClose}
+                    aria-label="Fechar diálogo"
                     className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors p-2 hover:rotate-90 duration-300"
                 >
                     <X size={20} />

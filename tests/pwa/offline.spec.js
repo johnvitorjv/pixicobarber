@@ -1,5 +1,8 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { test, expect } from '@playwright/test';
+test.beforeEach(async ({context}) => {
+    await context.route('**/*', route => ['127.0.0.1','localhost'].includes(new URL(route.request().url()).hostname) ? route.continue() : route.abort());
+});
 test('production PWA uses an informative offline page, preserving foreign caches and excluding private requests', async ({ page, context }) => {
     await page.goto('/offline.html');
     await page.evaluate(async () => { await caches.open('unrelated-app-cache'); await caches.open('pixico-static-v1'); });
@@ -37,10 +40,14 @@ test('new worker offers an update; activation removes old PIXICO cache', async (
     await page.goto('/login');
     await page.evaluate(async () => { await navigator.serviceWorker.ready; if (!navigator.serviceWorker.controller) await new Promise(resolve=>navigator.serviceWorker.addEventListener('controllerchange',resolve,{once:true})); });
     try {
+        expect(original).toMatch(/const CACHE_NAME = '[^']+';/);
         await writeFile(path,original.replace(/const CACHE_NAME = '[^']+';/, () => "const CACHE_NAME = 'pixico-static-test-updated';"));
         await page.evaluate(async () => (await navigator.serviceWorker.getRegistration()).update());
         await expect(page.getByRole('button',{name:'Atualizar agora'})).toBeVisible();
-        await page.getByRole('button',{name:'Atualizar agora'}).click();
+        await Promise.all([
+            page.waitForEvent('load'),
+            page.getByRole('button',{name:'Atualizar agora'}).click(),
+        ]);
         await expect(page.getByRole('heading',{name:'Entrar',exact:true})).toBeVisible();
         await expect.poll(()=>page.evaluate(()=>caches.keys())).toEqual(['pixico-static-test-updated']);
     } finally { await writeFile(path,original); }

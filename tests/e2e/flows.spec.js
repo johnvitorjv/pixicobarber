@@ -96,17 +96,20 @@ for (const chemical of ['Platinado','Luzes']) test(`${chemical} request has vari
 });
 
 for (const chemical of ['Platinado','Luzes']) test(`admin validates and confirms the full ${chemical} occupation`,async({page})=>{
+    await page.setViewportSize({width:chemical==='Platinado'?320:390,height:844});
     const state=await mockBackend(page,{admin:true,flagged:true,chemical}); await login(page);await expect(page).toHaveURL(/\/admin$/);
     await page.goto('/admin/agendamentos');
     await expect(page.locator('td').getByText('Solicitação química · sem reserva',{exact:true})).toBeVisible();
     await page.getByRole('button',{name:'Aprovar',exact:true}).click();
+    await expect.poll(()=>page.getByRole('dialog').evaluate(el=>el.getBoundingClientRect().top)).toBeGreaterThanOrEqual(0);
+    await expect(page.getByRole('button',{name:'Fechar diálogo'})).toBeInViewport();
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
     await expect(page.getByText(/incluindo processamento e lavagem/)).toBeVisible();
     await page.getByLabel('Fim ocupado').fill('09:15');
     await page.getByRole('button',{name:'Confirmar Aprovação'}).click();
     await expect(page.getByRole('dialog').getByRole('alert')).toContainText('30 a 480 minutos');
     expect(state.mutations.filter(m=>m.path.endsWith('/appointments')&&m.method==='PATCH')).toHaveLength(0);
     await page.getByLabel('Fim ocupado').fill('12:00');
-    await page.setViewportSize({width:390,height:844});
     await page.screenshot({path:'test-results/chemical-confirmation-mobile.png',fullPage:true});
     await page.getByRole('button',{name:'Confirmar Aprovação'}).click();
     await expect(page.getByRole('heading',{name:'Aprovar Agendamento'})).toHaveCount(0);

@@ -73,6 +73,14 @@ Revisão final desta continuação:
   caches, corrigindo a corrida observada. Passou em três repetições completas.
 - Nenhum auxiliar temporário de edição ficou no repositório. Os dois scripts em
   `scripts/` são usados pelo build e foram mantidos. Não houve refatoração visual.
+- Modal químico abre com cabeçalho/fechamento acessíveis e sem overflow em 320/390 px.
+  A captura rolada durante edição não representa corte do cabeçalho na abertura;
+  o alinhamento original foi mantido. O botão de fechar recebeu nome acessível.
+
+Commits locais desta continuação: `294fc1f` (foundation/preflight/legado e fixtures)
+e `b8d08de` (confirmação química/calendário/cache/E2E), seguidos da consolidação
+dos testes PWA, geometria do modal e roteiro de homologação. Os dois commits
+anteriores solicitados permanecem ancestrais intactos desta branch.
 
 Validação final desta etapa: **50 testes Node/SQL**, **20 cenários de navegador** e
 **2 de PWA** (72 distintos), todos aprovados; lint, build e `git diff --check`. SQL executado em

@@ -3,17 +3,80 @@
 Nada deste documento foi executado em Supabase ou Cloudflare remotos.
 Push, deploy e execução de SQL remoto dependem de autorização explícita do proprietário.
 
+## Gate local atualizado — 06/10/2026
+
+- [x] Regras confirmadas: ter–sáb 09:00–20:00, pausa 13:00–15:30, inícios a cada
+  15 min, sem caps; contato/endereço atualizados; 18 serviços com valores confirmados.
+- [x] Exceções completas por data, vários intervalos/bloqueios, abertura dom/seg,
+  fechamento e restauração do padrão com proteção de reservas futuras.
+- [x] Corte criança ter/qua/qui; Platinado/Luzes com solicitação sem reserva,
+  duração variável e confirmação administrativa da ocupação total.
+- [x] Revisar e preservar `49b38b5`/`f97862e` e alterações pendentes anteriores.
+- [x] 50 testes Node/SQL, 20 de navegador, 2 PWA (72 distintos); lint, build e diff.
+  PWA também aprovada em três repetições; cenários SQL executados isoladamente.
+- [x] Preflight somente leitura testado nos schemas legado e novo; aliases, RLS,
+  triggers, químicos ativos, nulabilidade e versões/extensões incluídos na revisão.
+- [x] Preservar duração legada sem arredondar, preço promocional de backfill e
+  grants de funções privadas não pertencentes ao PIXICO.
+- [x] Impedir reaplicação da foundation e abortar se faltar trigger de cadastro;
+  rollback e conservação do schema original comprovados em banco descartável.
+- [ ] Revisar com o profissional o mínimo conservador de 30 min e máximo de
+  480 min de ocupação química contínua. Inclui aplicação, processamento e lavagem;
+  15 min é somente aplicação aproximada. Pedido não bloqueia agenda e não garante
+  horário; confirmação revalida a disponibilidade e pode falhar por conflito.
+- [ ] Revisar que override substitui também pausa/férias/bloqueios globais. Inserir
+  todos os intervalos e pausas desejados nessa data; feriados são manuais.
+- [ ] Revisar aliases do catálogo real: nomes normalizados são reaproveitados;
+  duplicatas ambíguas abortam a migração. Serviços desconhecidos não são excluídos.
+- [ ] Preparar PostgreSQL/Supabase descartável autorizado, isolado de produção,
+  para testar migração com legado revisado e concorrência em duas conexões.
+  PGlite cobre SQL/exclusão, mas sua fila não reproduz duas transações simultâneas.
+- [ ] No ensaio, testar reserva × reserva, reserva × fechamento, confirmação
+  química × reserva e mudança de dias permitidos × reserva. Apenas estado
+  consistente pode ser efetivado; repetir em READ COMMITTED e documentar resultado.
+- [ ] Testar PostgREST: novo `solicitado`, `faixa_fim` nulo em pedidos químicos,
+  `confirmacao_manual` público, catálogo com `duracao` nula, `dias_permitidos` e
+  `aplicacao_minutos`. Notas privadas continuam inacessíveis a clientes.
+- [ ] Resolver por revisão, nunca apagando dados, qualquer reserva ativa legada
+  fora das regras ou químico ativo futuro. Esses casos abortam a migração inteira.
+  Químicos futuros exigem preparação explícita de dados/ocupação em ensaio antes
+  de propor uma migração produtiva; não basta assumir que duram 15 min. A foundation
+  rejeita todo químico ativo legado futuro, mesmo após alterar seu término: qualquer
+  adaptação desse gate exige plano SQL revisado e aprovado, preservando reservas.
+
+Nenhum passo remoto acima está autorizado nesta etapa. A revisão local terminou;
+o próximo gate técnico é o ensaio isolado explicitamente autorizado. Só depois
+avaliar backup, janela e aprovação produtiva.
+
+Sequência do próximo ensaio, após autorização restrita ao ambiente de teste:
+
+1. Confirmar project ref/host e isolamento de produção; receber do operador uma
+   cópia revisada/minimizada do legado. Não obter dados produtivos nesta etapa.
+2. No banco de teste existente, executar somente `supabase/preflight.sql` integral,
+   em uma conexão, guardando todos os resultados. Confirmar READ ONLY, ROLLBACK
+   e sucesso; erro/timeout interrompe o ensaio. Não executar a baseline nesse banco.
+3. Revisar objetos existentes, trigger de cadastro, aliases, reservas/químicos e
+   policies/grants extras. Preflight aprovado não autoriza aplicar a migration.
+4. Se a foundation ainda não estiver instalada e os dados forem compatíveis,
+   aprovar separadamente sua aplicação no teste; caso já exista, parar e preparar
+   migration incremental. Não alterar uma versão já aplicada na história real.
+5. Testar as quatro disputas em duas conexões READ COMMITTED, ambos os sentidos
+   de aquisição do lock, commit e rollback. Homologar Auth/PostgREST/RPC/Realtime.
+   PGlite serializado e HTTP simulado não substituem esse passo.
+
 ## 1. Revisão antes de executar SQL
 
 A migration `supabase/migrations/202610010001_production_foundation.sql` é
 transacional. Ela adiciona tabelas de expediente/configuração/despesas/notificações,
-colunas históricas, regras de status/duração/capacidade e uma constraint de exclusão
+colunas históricas, regras de status/duração/expediente e uma constraint de exclusão
 que rejeita sobreposição em um único barbeiro. Recria policies e grants das tabelas
 da aplicação, protege role e notas internas, fixa cadastro como cliente e configura
 Storage/Realtime. Não apaga reservas nem corrige conflitos automaticamente.
 
 O preço histórico de registros antigos é preenchido com o catálogo disponível:
-o preço original, se nunca foi salvo, não pode ser reconstruído automaticamente.
+usa promoção vigente quando disponível, antes da troca de catálogo, e preserva
+preço já registrado. O preço original, se nunca foi salvo, não pode ser reconstruído
+com certeza e exige revisão financeira.
 Admins existentes são mantidos; como o cadastro antigo permitia elevação indevida,
 cada UUID administrativo deve ser revisado por um operador confiável.
 
@@ -21,6 +84,11 @@ Em banco **existente**, execute primeiro apenas `supabase/preflight.sql` em ambi
 autorizado. Ele é somente leitura e termina com ROLLBACK. Revise colunas, constraints,
 policies/grants adicionais, status nulos/inválidos, serviços inválidos e sobreposições.
 Compare o schema real com a baseline. Produza backup verificável antes de migrar.
+O preflight também lista tables já existentes, estado de RLS, triggers, extensões,
+catálogo ambíguo, químicos ativos e desvios das novas regras padrão. Overrides
+explícitos podem justificar desvios: revisar, não excluir registros automaticamente.
+Se o schema privado for compartilhado, revisar seu USAGE/grants e funções de
+outros sistemas; a migration só revoga EXECUTE das funções internas do PIXICO.
 A migration aborta inteira se os dados existentes violarem constraints: não force,
 não remova dados e não desative a exclusão para conseguir aplicá-la.
 
@@ -43,7 +111,7 @@ Não publique frontend novo contra banco antigo.
 - Em desenvolvimento, autorizar as duas rotas de localhost usadas no teste manual.
 - Promover somente a conta aprovada por SQL executado por operador confiável.
   Nunca aceitar role em metadados ou expor service_role ao navegador.
-- Conferir catálogo, duração, preços, dias de trabalho, almoço, limites, férias,
+- Conferir catálogo, duração, preços, dias de trabalho, almoço, exceções, férias,
   endereço e telefone reais. Valores iniciais da migration precisam de revisão.
 - RLS deve estar habilitada; revisar policies adicionais em schemas públicos/Storage.
   A migration só remove no Storage as policies legadas conhecidas; policies extras
@@ -67,15 +135,16 @@ Não publique frontend novo contra banco antigo.
   outro cliente, confirmação arbitrária e gravação de duração/preço forjados.
 - Dois clientes reservar o mesmo horário simultaneamente em **conexões diferentes**:
   uma reserva deve ganhar, a outra deve receber conflito; testar slots que se sobrepõem
-  parcialmente, limite diário/turno e alteração de expediente concorrente com reserva.
-- Testar serviços com 30/45/60 minutos, almoço, dia fechado, férias, horários bloqueados,
+  parcialmente e alteração de expediente concorrente com reserva, sem caps artificiais.
+- Testar serviços com 5/15/30/45 minutos, almoço, dia fechado, férias, horários bloqueados,
   passado, janela de 60 dias e cancelamento que libera horários.
 - Confirmar, rejeitar com motivo, propor nova data, aceitar pelo cliente, cancelar,
   registrar ausência e concluir apenas atendimento iniciado com cobrança/pagamento.
   Proposta mantém a reserva original e não garante o novo horário até o aceite.
 - Alterar preço do catálogo e comprovar histórico/cobrança/receita preservados.
 - Salvar clientes/tags/favoritos/blacklist, configurações, imagens e despesas; reler
-  em outro dispositivo. Fechar um dia não cancela reservas já existentes.
+  em outro dispositivo. Fechar um dia com reservas incompatíveis deve falhar e
+  preservar tanto as reservas quanto a regra anterior.
 - Interromper rede durante leituras/gravações: erro visível, formulário preservado,
   retry e ausência de pedido fictício/duplicado.
 - Verificar 320/390/768/1280 px, Android e iOS, teclado, instalação PWA, atualização
