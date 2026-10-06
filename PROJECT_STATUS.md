@@ -1,5 +1,17 @@
 # PIXICO Barber — auditoria e conclusão técnica
 
+## Implantação inicial real — 06/10/2026
+
+- Preflight READ ONLY executado com sucesso no Supabase `pnsqtpoypbweummokhia`.
+- Backup lógico pré-migration salvo localmente fora do repositório em `C:\Users\johnv\PixicoBackups\2026-10-06_before_foundation.json`.
+- Foundation aplicada no Supabase real como migration `production_foundation_20261006`.
+- Dados de teste de clientes/agendamentos removidos; conta admin PIXICO preservada.
+- Catálogo de lançamento: 18 serviços ativos/agendáveis. Serviço legado `Sobrancelha` preservado, porém inativo e oculto.
+- PostgREST público validado contra o projeto real: catálogo, expediente e dados do negócio respondendo corretamente.
+- Build de produção com a URL/chave pública reais aprovado localmente.
+- Cloudflare Pages já contém configuração do mesmo Supabase no deploy atual; publicação do novo frontend ainda é o gate final.
+- Configuração Auth ainda requer troca do Site URL `localhost:3000` para `https://pixicobarber.pages.dev` e redirects exatos antes de validar recuperação de senha.
+
 Atualizado em 06/10/2026, America/Bahia. Branch: `finalizacao-pixico`.
 Escopo autorizado: arquivos e commits locais. Nenhum push, deploy, alteração de
 Cloudflare ou execução de SQL remoto foi realizado.

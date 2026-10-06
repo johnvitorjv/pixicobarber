@@ -1,7 +1,16 @@
 # PIXICO — homologação e publicação
 
-Nada deste documento foi executado em Supabase ou Cloudflare remotos.
-Push, deploy e execução de SQL remoto dependem de autorização explícita do proprietário.
+## Estado remoto atual — 06/10/2026
+
+- [x] Preflight READ ONLY executado no Supabase real.
+- [x] Backup lógico pré-migration salvo localmente.
+- [x] Foundation aplicada como `production_foundation_20261006`.
+- [x] Clientes/agendamentos históricos de teste removidos; admin PIXICO preservado.
+- [x] 18 serviços oficiais ativos/agendáveis; `Sobrancelha` legado inativo/oculto.
+- [x] PostgREST público validado no Supabase real e build de produção aprovado.
+- [ ] Ajustar Site URL/redirects do Supabase Auth para `https://pixicobarber.pages.dev`.
+- [ ] Publicar o novo frontend no Cloudflare Pages e executar smoke test final público.
+- [ ] Validar cadastro/login/recuperação de senha e um agendamento real de teste antes da inauguração.
 
 ## Gate local atualizado — 06/10/2026
 
