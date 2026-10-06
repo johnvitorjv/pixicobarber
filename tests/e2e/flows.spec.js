@@ -8,8 +8,8 @@ test.beforeEach(async ({page}) => {
     await page.route('**/*', route => ['127.0.0.1','localhost'].includes(new URL(route.request().url()).hostname) ? route.continue() : route.abort());
 });
 
-async function mockBackend(page, { admin = false, failBooking = false, failService = false, failLogout = false, flagged = false, chemical = false, failOverride = false } = {}) {
-    const state = { mutations: [], apps: [], signedOut: false, failLogout, config: {nomeNegocio:'PIXICO Barber',whatsappNumero:'5571994096863',endereco:'Salvador',blacklistBehavior:'approval'} };
+async function mockBackend(page, { admin = false, failBooking = false, failService = false, failLogout = false, flagged = false, chemical = false, failOverride = false, failConfirmation = false } = {}) {
+    const state = { mutations: [], apps: [], signedOut: false, failLogout, failConfirmation, config: {nomeNegocio:'PIXICO Barber',whatsappNumero:'5571994096863',endereco:'Salvador',blacklistBehavior:'approval'} };
     const payload = Buffer.from(JSON.stringify({sub:id,exp:Math.floor(Date.now()/1000)+3600,role:'authenticated'})).toString('base64url');
     state.accessToken = 'eyJhbGciOiJIUzI1NiJ9.'+payload+'.test-signature';
     const authUser = { id, email: 'teste@example.invalid', aud: 'authenticated', role: 'authenticated',
@@ -17,9 +17,9 @@ async function mockBackend(page, { admin = false, failBooking = false, failServi
     const profile = { id, nome: 'Cliente', sobrenome: 'Teste', role: admin ? 'admin' : 'client', whatsapp: '5571999990000', foto_url: '', criado_em: '2026-01-01T12:00:00Z' };
     const service = { id: serviceId, nome: 'Corte', descricao_curta: 'Corte de teste', preco: 60, duracao: 45,
         categoria: 'corte', status: 'ativo', ordem: 1, visivel_home: true, visivel_cliente: true, visivel_agendamento: true };
-    if (chemical) Object.assign(service,{nome:'Platinado',descricao_curta:'Químico de teste',preco:100,duracao:null,confirmacao_manual:true,aplicacao_minutos:15});
+    if (chemical) Object.assign(service,{nome:typeof chemical==='string'?chemical:'Platinado',descricao_curta:'Químico de teste',preco:chemical==='Luzes'?80:100,duracao:null,confirmacao_manual:true,aplicacao_minutos:15});
     if (flagged) state.apps.push({id:'55555555-5555-4555-8555-555555555555',cliente_id:id,servico_id:serviceId,data:day,faixa_inicio:'09:00',faixa_fim:'09:45',status:'pendente',servico_nome_reservado:'Corte',preco_reservado:60,profiles:profile,services:service});
-    if (flagged && chemical) Object.assign(state.apps[0],{servico_nome_reservado:'Platinado',status:'solicitado',faixa_fim:null,confirmacao_manual:true});
+    if (flagged && chemical) Object.assign(state.apps[0],{servico_nome_reservado:service.nome,preco_reservado:service.preco,status:'solicitado',faixa_fim:null,confirmacao_manual:true});
     state.overrides=[];
     await page.route('http://127.0.0.1:54321/**', async route => {
         const req = route.request(), url = new URL(req.url());
@@ -50,8 +50,11 @@ async function mockBackend(page, { admin = false, failBooking = false, failServi
         else if (path.endsWith('/appointments')) {
             if (method === 'POST') {
                 if (failBooking) { status = 409; response = {code:'23P01',message:'conflict'}; }
-                else { const a = {id:'55555555-5555-4555-8555-555555555555', ...req.postDataJSON(), servico_nome_reservado:'Corte',preco_reservado:60,profiles:profile,services:service}; state.apps.push(a); response = a; }
-            } else if (method === 'PATCH') { Object.assign(state.apps[0],req.postDataJSON()); response = state.apps[0]; }
+                else { const a = {id:'55555555-5555-4555-8555-555555555555', ...req.postDataJSON(), confirmacao_manual:!!chemical,servico_nome_reservado:service.nome,preco_reservado:service.preco,profiles:profile,services:service}; state.apps.push(a); response = a; }
+            } else if (method === 'PATCH') {
+                if(state.failConfirmation && req.postDataJSON().status==='confirmado') {status=409;response={code:'23P01',message:'conflict'};}
+                else {Object.assign(state.apps[0],req.postDataJSON());response=state.apps[0];}
+            }
             else response = state.apps;
         } else response = [];
         if (offset > 0 && Array.isArray(response)) response = [];
@@ -73,11 +76,11 @@ async function chooseBooking(page) {
     await page.getByRole('button',{name:'09:00 — 09:45',exact:true}).click();
 }
 
-test('chemical customer request clearly has variable duration, null end and no reservation guarantee',async({page})=>{
-    const state=await mockBackend(page,{chemical:true}); await login(page); await expect(page).toHaveURL(/\/painel$/);
+for (const chemical of ['Platinado','Luzes']) test(`${chemical} request has variable duration, null end and no reservation guarantee`,async({page})=>{
+    const state=await mockBackend(page,{chemical}); await login(page); await expect(page).toHaveURL(/\/painel$/);
     await page.goto('/agendar');
-    await expect(page.getByRole('button',{name:/Platinado/})).toContainText('Duração variável');
-    await page.getByRole('button',{name:/Platinado/}).click();
+    await expect(page.getByRole('button',{name:new RegExp(chemical)})).toContainText('Duração variável');
+    await page.getByRole('button',{name:new RegExp(chemical)}).click();
     await expect(page.getByRole('note')).toContainText('Este pedido não reserva uma vaga');
     if (tomorrow.getDate()===1) await page.getByRole('button').filter({has:page.locator('svg.lucide-chevron-right')}).click();
     await page.getByRole('button',{name:String(tomorrow.getDate()),exact:true}).click();
@@ -86,14 +89,22 @@ test('chemical customer request clearly has variable duration, null end and no r
     await expect(page.getByRole('heading',{name:/Solicitação.*Enviada/})).toBeVisible();
     const body=state.mutations.find(m=>m.path.endsWith('/appointments')).body;
     expect(body.status).toBe('solicitado');expect(body.faixa_fim).toBeNull();
+    await page.goto('/painel');
+    await expect(page.getByText('Solicitação química · sem reserva',{exact:true})).toBeVisible();
+    await page.getByRole('button',{name:'Cancelar',exact:true}).click();
+    await expect(page.getByText('Cancelado',{exact:true})).toBeVisible();
 });
 
-test('admin defines full chemical occupation before confirmation',async({page})=>{
-    const state=await mockBackend(page,{admin:true,flagged:true,chemical:true}); await login(page);await expect(page).toHaveURL(/\/admin$/);
+for (const chemical of ['Platinado','Luzes']) test(`admin validates and confirms the full ${chemical} occupation`,async({page})=>{
+    const state=await mockBackend(page,{admin:true,flagged:true,chemical}); await login(page);await expect(page).toHaveURL(/\/admin$/);
     await page.goto('/admin/agendamentos');
     await expect(page.locator('td').getByText('Solicitação química · sem reserva',{exact:true})).toBeVisible();
     await page.getByRole('button',{name:'Aprovar',exact:true}).click();
     await expect(page.getByText(/incluindo processamento e lavagem/)).toBeVisible();
+    await page.getByLabel('Fim ocupado').fill('09:15');
+    await page.getByRole('button',{name:'Confirmar Aprovação'}).click();
+    await expect(page.getByRole('dialog').getByRole('alert')).toContainText('30 a 480 minutos');
+    expect(state.mutations.filter(m=>m.path.endsWith('/appointments')&&m.method==='PATCH')).toHaveLength(0);
     await page.getByLabel('Fim ocupado').fill('12:00');
     await page.setViewportSize({width:390,height:844});
     await page.screenshot({path:'test-results/chemical-confirmation-mobile.png',fullPage:true});
@@ -121,6 +132,48 @@ test('admin saves multiple work intervals and arbitrary blocks; failed rules pre
     await page.screenshot({path:'test-results/date-override-mobile.png',fullPage:true});
     const body=state.mutations.find(m=>m.path.endsWith('/day_overrides')).body;
     expect(body.value.intervalos).toHaveLength(2);expect(body.value.bloqueios).toEqual([{inicio:'10:07',fim:'10:22'},{inicio:'16:03',fim:'16:18'}]);
+});
+
+test('chemical confirmation conflict preserves full occupation and permits a deliberate retry',async({page})=>{
+    const state=await mockBackend(page,{admin:true,flagged:true,chemical:'Luzes',failConfirmation:true});
+    await login(page);await expect(page).toHaveURL(/\/admin$/);await page.goto('/admin/agendamentos');
+    await page.getByRole('button',{name:'Aprovar',exact:true}).click();
+    await page.getByLabel('Fim ocupado').fill('12:00');
+    await page.getByRole('button',{name:'Confirmar Aprovação'}).click();
+    await expect(page.getByRole('dialog').getByRole('alert')).toContainText('Escolha outro');
+    await expect(page.getByLabel('Fim ocupado')).toHaveValue('12:00');
+    expect(state.apps[0].status).toBe('solicitado');
+    state.failConfirmation=false;
+    await page.getByLabel('Início ocupado').fill('15:30');await page.getByLabel('Fim ocupado').fill('18:00');
+    await page.getByRole('button',{name:'Confirmar Aprovação'}).click();
+    await expect(page.getByRole('heading',{name:'Aprovar Agendamento'})).toHaveCount(0);
+    expect(state.apps[0]).toMatchObject({status:'confirmado',faixa_inicio:'15:30',faixa_fim:'18:00'});
+});
+
+test('restoring a saved date exception refreshes the editor to the actual defaults',async({page})=>{
+    const state=await mockBackend(page,{admin:true});await login(page);await expect(page).toHaveURL(/\/admin$/);
+    await page.goto('/admin/disponibilidade');
+    if(tomorrow.getDate()===1) await page.getByRole('button').filter({has:page.locator('svg.lucide-chevron-right')}).click();
+    await page.getByRole('button',{name:String(tomorrow.getDate()),exact:true}).click();
+    await page.getByLabel('Trabalho 1 inicio').fill('08:00');
+    await page.getByRole('button',{name:'Salvar exceção',exact:true}).click();
+    await expect(page.getByRole('status')).toContainText('Exceção salva');
+    expect(state.overrides[0].value.intervalos[0].inicio).toBe('08:00');
+    await page.getByRole('button',{name:'Restaurar padrão da data',exact:true}).click();
+    await expect(page.getByRole('status')).toContainText('Expediente padrão restaurado');
+    await expect(page.getByLabel('Trabalho 1 inicio')).toHaveValue('09:00');
+    expect(state.overrides).toHaveLength(0);
+});
+
+test('cancelled chemical request never expands the occupied calendar to midnight',async({page})=>{
+    const state=await mockBackend(page,{admin:true,flagged:true,chemical:true});
+    Object.assign(state.apps[0],{status:'cancelado_cliente',data:bahiaDate()});
+    state.apps.push({...state.apps[0],id:'66666666-6666-4666-8666-666666666666',status:'confirmado',
+        servico_nome_reservado:'Reserva real',confirmacao_manual:false,faixa_inicio:'19:00',faixa_fim:'19:45'});
+    await login(page);await expect(page).toHaveURL(/\/admin$/);await page.goto('/admin/calendario');
+    await expect(page.getByText('Reserva real',{exact:true}).first()).toBeVisible();
+    await expect(page.getByText('00:00',{exact:true})).toHaveCount(0);
+    await expect(page.getByText('Platinado',{exact:true})).toHaveCount(0);
 });
 test('metadata cannot redirect a client to admin; logout completes and session is removed',async ({page}) => {
     const state = await mockBackend(page); await login(page);

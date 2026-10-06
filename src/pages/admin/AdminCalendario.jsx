@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import availabilityStore from '../../stores/availabilityStore';
 import DataState from '../../components/DataState';
 import { STATUS, STATUS_CONFIG } from '../../data/models';
@@ -27,7 +27,7 @@ export default function AdminCalendario() {
     const config = availabilityStore.getConfig();
     if (!config) return <DataState loading />;
     const disponibilidade = availabilityStore.getRange(60);
-    const todosAgendamentos = sbApps.filter(a => a.status !== 'solicitado');
+    const todosAgendamentos = sbApps.filter(a => a.faixaFim && !['solicitado','cancelado_cliente','cancelado_admin','rejeitado'].includes(a.status));
 
     // ─── Navegação ───
     function navAnterior() {
@@ -51,7 +51,7 @@ export default function AdminCalendario() {
         if (visao === 'dia') {
             return [new Date(dataRef)];
         }
-        // semana (seg-sáb)
+        // Semana completa, incluindo exceções de domingo e segunda.
         const d = new Date(dataRef);
         const dow = d.getDay();
         const seg = new Date(d);
@@ -219,7 +219,7 @@ export default function AdminCalendario() {
 
                     {/* Linhas de horário */}
                     {slots.map(slot => (
-                        <>
+                        <Fragment key={slot}>
                             {/* Label do horário */}
                             <div key={`label-${slot}`} className="border-b border-white/5 p-2 flex items-center justify-end pr-3">
                                 <span className="text-[10px] font-mono text-zinc-600">{slot}</span>
@@ -281,7 +281,7 @@ export default function AdminCalendario() {
                                     </div>
                                 );
                             })}
-                        </>
+                        </Fragment>
                     ))}
                 </div>
             </div>

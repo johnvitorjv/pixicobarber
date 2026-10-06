@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAction } from '../../hooks/useAction';
 import DataState from '../../components/DataState';
+import { timeMinutes } from '../../lib/bookingRules';
 import { STATUS, STATUS_CONFIG, MOTIVOS_REJEICAO, FORMAS_PAGAMENTO } from '../../data/models';
 import { TEMPLATES, gerarLinkWhatsAppCliente } from '../../data/whatsappTemplates';
 import { useStoreSync } from '../../hooks/useStore';
@@ -77,6 +78,12 @@ export default function AdminAgendamentos() {
 
     async function confirmarAprovar() {
         await action.execute(async () => {
+            if (modal.ag.confirmacaoManual) {
+                const start = timeMinutes(novaFaixaInicio), end = timeMinutes(novaFaixaFim);
+                if (!novaData || !Number.isFinite(start) || !Number.isFinite(end) || start % 15 !== 0 || end - start < 30 || end - start > 480) {
+                    throw new Error('Informe data, início na grade de 15 minutos e ocupação total de 30 a 480 minutos.');
+                }
+            }
             await updateAppointmentSupabase(modal.ag.id, { status: 'confirmado', ...(modal.ag.confirmacaoManual ? { data: novaData, faixaInicio: novaFaixaInicio, faixaFim: novaFaixaFim } : {}) }); await refetchAppointments(); setModal(null);
         });
     }
@@ -140,7 +147,7 @@ export default function AdminAgendamentos() {
 
     return (
         <div className="p-6 md:p-10 max-w-[1600px] mx-auto">
-            <DataState loading={sbLoading || clientsLoading || action.busy} error={queryError || clientsError || action.error} retry={() => Promise.all([refetchAppointments(), refetchClients()])} />
+            <DataState loading={sbLoading || clientsLoading || action.busy} error={queryError || clientsError || (!modal ? action.error : '')} retry={() => Promise.all([refetchAppointments(), refetchClients()])} />
             <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
                     <span className="text-[10px] font-bold uppercase tracking-[1em] text-primary mb-3 block">Gestão</span>
@@ -222,7 +229,7 @@ export default function AdminAgendamentos() {
                                         </td>
                                         <td className="py-4 px-6 font-modern text-zinc-300">{ag.servicoNome}</td>
                                         <td className="py-4 px-6 font-modern text-zinc-400">{formatData(ag.data)}</td>
-                                        <td className="py-4 px-6 font-display font-bold text-primary tracking-widest text-xs tabular-nums">{ag.faixaInicio} <span className="text-zinc-600 font-modern font-normal mx-1">—</span> {ag.faixaFim}</td>
+                                        <td className="py-4 px-6 font-display font-bold text-primary tracking-widest text-xs tabular-nums">{ag.faixaInicio} <span className="text-zinc-600 font-modern font-normal mx-1">—</span> {ag.faixaFim || 'a definir'}</td>
                                         <td className="py-4 px-6">
                                             <span className={`text-[9px] font-bold uppercase tracking-wider ${sc.cor} px-2 py-1 ${sc.bg} inline-block`}>
                                                 {sc.label || ag.status}
@@ -277,12 +284,12 @@ export default function AdminAgendamentos() {
                         <InfoRow label="Data" value={formatData(modal.ag.data)} />
                         <InfoRow label="Horário" value={`${modal.ag.faixaInicio} — ${modal.ag.faixaFim || 'a definir'}`} />
                     </div>
-                    <div>{modal.ag.confirmacaoManual && <div className="space-y-3 mb-6 border border-yellow-500/30 p-4">
+                    {modal.ag.confirmacaoManual && <div className="space-y-3 mb-6 border border-yellow-500/30 p-4">
                         <p className="text-sm text-yellow-300">Defina a ocupação total, incluindo processamento e lavagem (30 a 480 min). A confirmação exige todo o intervalo livre.</p>
                         <label className="block">Data do atendimento<input aria-label="Data do atendimento" type="date" className="w-full bg-black border border-white/20 p-2" value={novaData} onChange={e=>setNovaData(e.target.value)} /></label>
                         <label className="block">Início ocupado<input aria-label="Início ocupado" type="time" step="900" className="w-full bg-black border border-white/20 p-2" value={novaFaixaInicio} onChange={e=>setNovaFaixaInicio(e.target.value)} /></label>
                         <label className="block">Fim ocupado<input aria-label="Fim ocupado" type="time" className="w-full bg-black border border-white/20 p-2" value={novaFaixaFim} onChange={e=>setNovaFaixaFim(e.target.value)} /></label>
-                    </div>}</div>
+                    </div>}
                     <label className="text-[9px] font-bold uppercase tracking-[0.4em] text-zinc-500 block mb-3">Mensagem WhatsApp (editável)</label>
                     <textarea
                         value={mensagemWpp}
@@ -425,7 +432,7 @@ function ModalOverlay({ children, onClose }) {
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6 overflow-y-auto">
             <div className="fixed inset-0 bg-background-dark/80 backdrop-blur-xl transition-opacity" onClick={onClose} />
-            <div className="relative bg-black border border-white/10 p-8 w-full max-w-lg shadow-2xl z-10 my-auto">
+            <div role="dialog" aria-modal="true" className="relative bg-black border border-white/10 p-8 w-full max-w-lg shadow-2xl z-10 my-auto">
                 <button
                     onClick={onClose}
                     className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors p-2 hover:rotate-90 duration-300"

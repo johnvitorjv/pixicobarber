@@ -36,9 +36,7 @@ const availabilityStore = {
         return this.setDay(dateStr, defaultOpenDay(this.getConfig()));
     },
     async resetDay(dateStr) {
-        const { error } = await requireSupabase().from('day_overrides').delete().eq('data', dateStr);
-        if (error) throw error;
-        await overrides.load();
+        await overrides.write(requireSupabase().from('day_overrides').delete().eq('data', dateStr));
     },
     getRange(days = 60) {
         const result = {};
