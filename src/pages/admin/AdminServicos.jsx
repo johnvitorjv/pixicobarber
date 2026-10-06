@@ -1,4 +1,5 @@
 import { serviceDurationLabel } from '../../lib/bookingRules';
+import { groupServices } from '../../lib/serviceGroups';
 import { useState, useRef } from 'react';
 import { CATEGORIAS, BADGES } from '../../stores/serviceStore';
 import { useStoreSync } from '../../hooks/useStore';
@@ -49,6 +50,7 @@ export default function AdminServicos() {
         if (filtroCategoria && s.categoria !== filtroCategoria) return false;
         return true;
     });
+    const gruposFiltrados = groupServices(filtrados);
 
     async function handleDelete(id) {
         await action.execute(async () => { await deleteServiceSupabase(id); await refetchServices(); setConfirmDelete(null); });
@@ -154,9 +156,19 @@ export default function AdminServicos() {
                     </button>
                 </div>
             ) : (
-                <div className="space-y-3">
-                    {filtrados.map((servico) => (
-                        <div
+                <div className="space-y-10">
+                    {gruposFiltrados.map((grupo) => (
+                        <section key={grupo.id}>
+                            <div className="mb-4 flex items-end justify-between gap-4 border-b border-white/10 pb-3">
+                                <div>
+                                    <h2 className="font-display font-bold text-xl uppercase tracking-wider text-white">{grupo.label}</h2>
+                                    <p className="text-zinc-600 text-xs font-modern mt-1">{grupo.description}</p>
+                                </div>
+                                <span className="text-[9px] font-bold uppercase tracking-[0.35em] text-primary">{grupo.services.length} serviço(s)</span>
+                            </div>
+                            <div className="space-y-3">
+                                {grupo.services.map((servico) => (
+                                    <div
                             key={servico.id}
                             className={`flex flex-col md:flex-row md:items-center gap-4 p-4 md:p-5 border transition-all hover:bg-white/[0.02] group ${servico.status === 'inativo' ? 'border-white/5 opacity-60' : 'border-white/5 hover:border-white/20'
                                 } bg-black`}
@@ -239,7 +251,10 @@ export default function AdminServicos() {
                                     </button>
                                 </div>
                             </div>
-                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
                     ))}
                 </div>
             )}

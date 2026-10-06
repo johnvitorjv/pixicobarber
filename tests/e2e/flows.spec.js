@@ -14,7 +14,7 @@ async function mockBackend(page, { admin = false, failBooking = false, failServi
     state.accessToken = 'eyJhbGciOiJIUzI1NiJ9.'+payload+'.test-signature';
     const authUser = { id, email: 'teste@example.invalid', aud: 'authenticated', role: 'authenticated',
         user_metadata: { role: 'admin', nome: 'Metadados não confiáveis' } };
-    const profile = { id, nome: 'Cliente', sobrenome: 'Teste', role: admin ? 'admin' : 'client', whatsapp: '5571999990000', foto_url: '', criado_em: '2026-01-01T12:00:00Z' };
+    const profile = { id, nome: 'Cliente', sobrenome: 'Teste', role: admin ? 'admin' : 'client', whatsapp: '5571999990000', foto_url: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==', criado_em: '2026-01-01T12:00:00Z' };
     const service = { id: serviceId, nome: 'Corte', descricao_curta: 'Corte de teste', preco: 60, duracao: 45,
         categoria: 'corte', status: 'ativo', ordem: 1, visivel_home: true, visivel_cliente: true, visivel_agendamento: true };
     if (chemical) Object.assign(service,{nome:typeof chemical==='string'?chemical:'Platinado',descricao_curta:'Químico de teste',preco:chemical==='Luzes'?80:100,duracao:null,confirmacao_manual:true,aplicacao_minutos:15});
@@ -189,6 +189,9 @@ test('metadata cannot redirect a client to admin; logout completes and session i
 test('registration shows email confirmation without redirecting or embedding images in metadata',async ({page}) => {
     const state = await mockBackend(page); await page.goto('/cadastro');
     for (const [name,value] of Object.entries({nome:'Cliente',sobrenome:'Teste',whatsapp:'71999990000',email:'teste@example.invalid',senha:'LocalTest123!',confirmarSenha:'LocalTest123!'})) await page.locator('input[name='+name+']').fill(value);
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=','base64');
+    await page.locator('input[type=file]').setInputFiles({name:'perfil.png',mimeType:'image/png',buffer:png});
+    await expect(page.locator('img[alt="Foto"]')).toBeVisible();
     await page.getByRole('button',{name:'Criar Conta',exact:true}).click();
     await expect(page.getByRole('status')).toContainText('Verifique seu e-mail');
     await expect(page).toHaveURL(/\/cadastro$/);
@@ -298,4 +301,99 @@ test('admin appointments display persisted favorite and blacklist flags',async (
     await page.goto('/admin/agendamentos');
     await expect(page.getByRole('img',{name:'Cliente favorito'})).toBeVisible();
     await expect(page.getByRole('img',{name:'Cliente bloqueado'})).toBeVisible();
+});
+
+
+test('mobile menu stays fixed, readable and locks page scroll', async ({page}) => {
+    await page.setViewportSize({width:390,height:844});
+    await mockBackend(page);
+    await page.goto('/');
+    await page.getByRole('button',{name:'Abrir menu'}).click();
+    await expect(page.getByRole('button',{name:'Fechar menu'})).toBeVisible();
+    const menu = page.getByTestId('mobile-menu');
+    for (const label of ['Home','Sobre','Serviços','Galeria','Contato']) {
+        await expect(menu.getByRole('link',{name:label,exact:true})).toBeVisible();
+    }
+    expect(await page.evaluate(()=>document.body.style.overflow)).toBe('hidden');
+    await page.waitForTimeout(350);
+    expect(await menu.evaluate(el => getComputedStyle(el).backgroundColor)).toBe('rgb(0, 0, 0)');
+    expect(Number(await menu.evaluate(el => getComputedStyle(el).opacity))).toBe(1);
+    const positions = await menu.locator('a[href^="#"]').evaluateAll(els => els.map(el => el.getBoundingClientRect().top));
+    expect(positions).toEqual([...positions].sort((a,b)=>a-b));
+    await menu.getByRole('link',{name:'Galeria',exact:true}).click();
+    await expect(page.getByRole('button',{name:'Abrir menu'})).toBeVisible();
+    expect(await page.evaluate(()=>document.body.style.overflow)).toBe('');
+});
+
+test('registration requires a profile photo and carries it into first login', async ({page}) => {
+    const state = await mockBackend(page);
+    await page.goto('/cadastro');
+    await page.locator('input[name=nome]').fill('Cliente');
+    await page.locator('input[name=sobrenome]').fill('Foto');
+    await page.locator('input[name=whatsapp]').fill('71999999999');
+    await page.locator('input[name=email]').fill('teste@example.invalid');
+    await page.locator('input[name=senha]').fill('LocalTest123!');
+    await page.locator('input[name=confirmarSenha]').fill('LocalTest123!');
+
+    await page.getByRole('button',{name:'Criar Conta'}).click();
+    await expect(page.getByText('A foto de perfil é obrigatória para o cadastro.')).toBeVisible();
+
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=','base64');
+    await page.locator('input[type=file]').setInputFiles({name:'perfil.png',mimeType:'image/png',buffer:png});
+    await expect(page.locator('img[alt="Foto"]')).toBeVisible();
+    await expect(page.getByRole('button',{name:'Remover foto'})).toHaveCount(0);
+    await page.getByRole('button',{name:'Criar Conta'}).click();
+    await expect(page.getByRole('status')).toContainText('Verifique seu e-mail');
+
+    await page.getByRole('status').getByRole('link',{name:'Entrar'}).click();
+    await page.locator('input[name=email]').fill('teste@example.invalid');
+    await page.locator('input[name=senha]').fill('LocalTest123!');
+    await page.getByRole('button',{name:'Entrar',exact:true}).click();
+    await expect(page).toHaveURL(/\/painel$/);
+    expect(state.mutations.some(m=>m.path.endsWith('/profiles') && m.method==='PATCH' && typeof m.body.foto_url==='string' && m.body.foto_url.startsWith('data:image/jpeg;base64,'))).toBe(true);
+});
+
+test('booking and admin catalog show the three practical service groups', async ({page}) => {
+    await mockBackend(page);
+    await login(page);
+    await page.goto('/agendar');
+    await expect(page.getByRole('heading',{name:'Serviços avulsos'})).toBeVisible();
+
+    await mockBackend(page,{admin:true});
+    await page.goto('/login');
+    await page.locator('input[name=email]').fill('teste@example.invalid');
+    await page.locator('input[name=senha]').fill('LocalTest123!');
+    await page.getByRole('button',{name:'Entrar',exact:true}).click();
+    await page.goto('/admin/servicos');
+    await expect(page.getByRole('heading',{name:'Serviços avulsos'})).toBeVisible();
+});
+
+test('admin approval shows weekday beside the appointment date', async ({page}) => {
+    await mockBackend(page,{admin:true,flagged:true});
+    await login(page);
+    await page.goto('/admin/agendamentos');
+    const weekdayRaw = new Intl.DateTimeFormat('pt-BR',{weekday:'long',timeZone:'America/Bahia'}).format(new Date(day+'T12:00:00Z'));
+    const weekday = weekdayRaw.charAt(0).toUpperCase()+weekdayRaw.slice(1);
+    await expect(page.getByText(weekday,{exact:true}).first()).toBeVisible();
+    await page.getByRole('button',{name:'Aprovar',exact:true}).click();
+    await expect(page.getByRole('dialog').getByText(weekday,{exact:true})).toBeVisible();
+});
+
+test('home images animate when they cross the mobile viewport center', async ({page}) => {
+    await page.setViewportSize({width:390,height:844});
+    await mockBackend(page);
+    await page.goto('/');
+
+    const assertCenterAnimation = async (locator) => {
+        await locator.evaluate(el => el.scrollIntoView({block:'center'}));
+        await page.waitForTimeout(250);
+        await expect.poll(() => locator.evaluate(el => el.className.split(/\s+/).includes('grayscale-0'))).toBe(true);
+        await page.evaluate(() => window.scrollTo({top:0,behavior:'instant'}));
+        await page.waitForTimeout(250);
+        await expect.poll(() => locator.evaluate(el => el.className.split(/\s+/).includes('grayscale-0'))).toBe(false);
+    };
+
+    await assertCenterAnimation(page.locator('.phil-image img'));
+    await assertCenterAnimation(page.locator('.service-card img').first());
+    await assertCenterAnimation(page.locator('.gallery-item img').first());
 });

@@ -6,8 +6,7 @@ import { Camera, X, Image as ImageIcon } from 'lucide-react';
 // Dados persistidos exclusivamente pelo Supabase.
 // ═══════════════════════════════════════════════
 
-const MAX_SIZE_MB = 2;
-const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_SIZE_MB = 10;
 
 /**
  * PhotoUpload — componente reutilizável para upload de foto de perfil.
@@ -34,8 +33,8 @@ export default function PhotoUpload({ value, onChange, initials = '', required =
     function processFile(file) {
         setFileError('');
 
-        if (!ACCEPTED_TYPES.includes(file.type)) {
-            setFileError('Formato inválido. Use JPG, PNG ou WebP.');
+        if (!file.type?.startsWith('image/')) {
+            setFileError('Formato inválido. Selecione uma imagem do aparelho.');
             return;
         }
 
@@ -97,7 +96,7 @@ export default function PhotoUpload({ value, onChange, initials = '', required =
                             preview ? 'border-primary/30 hover:border-primary' :
                                 'border-white/10 hover:border-primary/50'
                     }`}
-                role="button" tabIndex={0} aria-label="Adicionar ou trocar foto" onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); inputRef.current?.click(); } }} onClick={() => inputRef.current?.click()}
+                role="button" tabIndex={0} aria-label="Adicionar ou trocar foto" aria-required={required} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); inputRef.current?.click(); } }} onClick={() => inputRef.current?.click()}
                 onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
                 onDragLeave={() => setDragging(false)}
                 onDrop={handleDrop}
@@ -108,13 +107,16 @@ export default function PhotoUpload({ value, onChange, initials = '', required =
                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                             <Camera size={s.icon} className="text-white" />
                         </div>
-                        <button
-                            type="button"
-                            aria-label="Remover foto" onClick={handleRemove}
-                            className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10"
-                        >
-                            <X size={10} />
-                        </button>
+                        {!required && (
+                            <button
+                                type="button"
+                                aria-label="Remover foto"
+                                onClick={handleRemove}
+                                className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10"
+                            >
+                                <X size={10} />
+                            </button>
+                        )}
                     </>
                 ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center gap-1 bg-zinc-900/80">
@@ -129,7 +131,7 @@ export default function PhotoUpload({ value, onChange, initials = '', required =
                 <input
                     ref={inputRef}
                     type="file"
-                    accept={ACCEPTED_TYPES.join(',')}
+                    accept="image/*"
                     onChange={handleFileChange}
                     className="hidden"
                 />

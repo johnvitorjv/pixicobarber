@@ -8,6 +8,7 @@ import availabilityStore from '../stores/availabilityStore';
 import { createAppointmentSupabase, useSupabaseServices } from '../hooks/useSupabase';
 import { useSlots } from '../hooks/useSlots';
 import { bahiaDate, calendarDate, mutationMessage, serviceAllowedOnDate, serviceDurationLabel } from '../lib/bookingRules';
+import { groupServices } from '../lib/serviceGroups';
 import DataState from '../components/DataState';
 import { useStoreSync } from '../hooks/useStore';
 import { ArrowLeft, Lock, Check, ChevronLeft, ChevronRight, MessageCircle, ArrowUpRight } from 'lucide-react';
@@ -32,6 +33,7 @@ export default function BookingPage() {
     const { loading: sbServicesLoading, error: servicesError, refetch: refetchServices, getById: sbGetById, getVisiveis: sbGetVisiveis } = useSupabaseServices();
 
     const servicosVisiveis = sbGetVisiveis('agendamento');
+    const gruposServicos = groupServices(servicosVisiveis);
     const getServicoById = (id) => sbGetById(id);
     const servicoSelecionado = getServicoById(servicoId);
     const { slots, loading: slotsLoading, error: slotsError, refetch: refetchSlots } = useSlots(dataSelecionada, servicoId);
@@ -54,6 +56,20 @@ export default function BookingPage() {
                             Criar Conta
                         </Link>
                     </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (!user?.fotoUrl) {
+        return (
+            <div className="min-h-screen bg-black flex items-center justify-center px-6">
+                <div className="text-center max-w-md w-full border border-white/5 p-10 bg-white/[0.02]">
+                    <h2 className="font-display font-bold text-3xl uppercase tracking-tighter mb-4 text-white">Foto obrigatória</h2>
+                    <p className="text-zinc-500 font-modern mb-8 text-sm leading-relaxed">Antes de agendar, adicione uma foto de perfil. Ela é usada pelo barbeiro para reconhecer o cliente.</p>
+                    <Link to="/painel#meus-dados" className="inline-block bg-primary text-black px-8 py-4 font-display font-bold uppercase text-[10px] tracking-[0.35em]">
+                        Adicionar foto
+                    </Link>
                 </div>
             </div>
         );
@@ -154,30 +170,46 @@ export default function BookingPage() {
                             <p className="text-zinc-500 font-modern text-sm uppercase tracking-widest">Nossos tratamentos exclusivos.</p>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                            {servicosVisiveis.map(s => (
-                                <button
-                                    key={s.id}
-                                    onClick={() => { setServicoId(s.id); setStep(2); }}
-                                    className={`group text-left p-6 md:p-8 border transition-all duration-500 hover:-translate-y-1 ${servicoId === s.id ? 'border-primary bg-primary/5 shadow-[0_0_30px_rgba(255,255,255,0.05)]' : 'border-white/5 bg-black hover:border-white/20'
-                                        }`}
-                                >
-                                    <div className="flex items-start justify-between mb-4">
-                                        <div className="pr-4">
-                                            <span className="font-display font-bold uppercase tracking-widest text-sm md:text-base block mb-2 text-white group-hover:text-primary transition-colors">{s.nome}</span>
-                                            <span className="text-zinc-500 font-modern text-xs leading-relaxed line-clamp-2">{s.descricaoCurta}</span>
+                        <div className="space-y-12">
+                            {gruposServicos.map(grupo => (
+                                <section key={grupo.id} aria-labelledby={`grupo-${grupo.id}`}>
+                                    <div className="mb-5 border-b border-white/10 pb-4">
+                                        <div className="flex items-end justify-between gap-4">
+                                            <h3 id={`grupo-${grupo.id}`} className="font-display font-bold text-xl md:text-2xl uppercase tracking-wider text-white">
+                                                {grupo.label}
+                                            </h3>
+                                            <span className="text-[9px] font-bold uppercase tracking-[0.35em] text-primary">{grupo.services.length} opções</span>
                                         </div>
-                                        <span className="font-display font-bold text-white text-xl md:text-2xl shrink-0 tabular-nums tracking-tighter">{formatPreco(s.precoPromocional ?? s.preco)}</span>
+                                        <p className="text-zinc-600 font-modern text-xs mt-2">{grupo.description}</p>
                                     </div>
-                                    <div className="border-t border-white/5 pt-4 flex items-center justify-between">
-                                        <span className="text-[9px] text-zinc-600 font-modern uppercase tracking-[0.3em]">
-                                            Duração
-                                        </span>
-                                        <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">
-                                            {serviceDurationLabel(s)}{s.diasPermitidos?.length < 7 && <span className="block mt-2">{s.diasPermitidos.map(d=>DIAS_SEMANA[d]).join(', ')}</span>}
-                                        </span>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                                        {grupo.services.map(s => (
+                                            <button
+                                                key={s.id}
+                                                onClick={() => { setServicoId(s.id); setStep(2); }}
+                                                className={`group text-left p-6 md:p-8 border transition-all duration-500 hover:-translate-y-1 ${servicoId === s.id ? 'border-primary bg-primary/5 shadow-[0_0_30px_rgba(255,255,255,0.05)]' : 'border-white/5 bg-black hover:border-white/20'
+                                                    }`}
+                                            >
+                                                <div className="flex items-start justify-between mb-4">
+                                                    <div className="pr-4">
+                                                        <span className="font-display font-bold uppercase tracking-widest text-sm md:text-base block mb-2 text-white group-hover:text-primary transition-colors">{s.nome}</span>
+                                                        <span className="text-zinc-500 font-modern text-xs leading-relaxed line-clamp-2">{s.descricaoCurta}</span>
+                                                    </div>
+                                                    <span className="font-display font-bold text-white text-xl md:text-2xl shrink-0 tabular-nums tracking-tighter">{formatPreco(s.precoPromocional ?? s.preco)}</span>
+                                                </div>
+                                                <div className="border-t border-white/5 pt-4 flex items-center justify-between">
+                                                    <span className="text-[9px] text-zinc-600 font-modern uppercase tracking-[0.3em]">
+                                                        Duração
+                                                    </span>
+                                                    <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">
+                                                        {serviceDurationLabel(s)}{s.diasPermitidos?.length < 7 && <span className="block mt-2">{s.diasPermitidos.map(d=>DIAS_SEMANA[d]).join(', ')}</span>}
+                                                    </span>
+                                                </div>
+                                            </button>
+                                        ))}
                                     </div>
-                                </button>
+                                </section>
                             ))}
                         </div>
                     </div>

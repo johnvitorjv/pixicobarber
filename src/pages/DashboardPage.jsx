@@ -196,7 +196,7 @@ export default function DashboardPage() {
                 )}
 
                 {/* Dados do Perfil */}
-                <div className="border-t border-white/5 pt-20">
+                <div id="meus-dados" className="border-t border-white/5 pt-20 scroll-mt-28">
                     <h2 className="font-display font-bold text-xl sm:text-2xl uppercase tracking-tighter mb-8 flex items-center gap-4 text-white">
                         <div className="w-1 h-5 bg-primary" /> Meus Dados
                     </h2>
@@ -209,6 +209,7 @@ export default function DashboardPage() {
                                     value={user?.fotoUrl || ''}
                                     onChange={(newFoto) => action.execute(async () => { await updateProfileSupabase(user.id, { foto_url: newFoto }); await refreshUser(); }, 'Foto atualizada.')}
                                     initials={(user?.nome?.[0] || '') + (user?.sobrenome?.[0] || '')}
+                                    required
                                     size="lg"
                                 />
                                 <div className="pointer-events-none absolute inset-0 bg-black/50 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-full">

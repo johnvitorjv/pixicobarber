@@ -14,6 +14,38 @@ function formatPreco(v) { return `R$ ${Number(v || 0).toFixed(0)}`; }
 
 gsap.registerPlugin(ScrollTrigger);
 
+function useMobileCenterActive(ref) {
+  const [active, setActive] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const media = window.matchMedia('(max-width: 767px)');
+    let observer;
+
+    const connect = () => {
+      observer?.disconnect();
+      if (!media.matches || !ref.current) {
+        setActive(false);
+        return;
+      }
+      observer = new IntersectionObserver(
+        ([entry]) => setActive(entry.isIntersecting),
+        { rootMargin: '-32% 0px -32% 0px', threshold: 0.01 }
+      );
+      observer.observe(ref.current);
+    };
+
+    connect();
+    media.addEventListener?.('change', connect);
+    return () => {
+      observer?.disconnect();
+      media.removeEventListener?.('change', connect);
+    };
+  }, [ref]);
+
+  return active;
+}
+
 /* ═══════════════════════════════════════════════════
    PIXICO BARBER — Barbearia Premium em Salvador
    ═══════════════════════════════════════════════════ */
@@ -72,51 +104,87 @@ function Navbar() {
     return () => ctx.revert();
   }, []);
 
-  return (
-    <nav ref={navRef} className="fixed top-0 left-0 w-full z-[100]" style={{ mixBlendMode: 'difference', pointerEvents: 'none' }}>
-      <div className="max-w-[1920px] mx-auto flex items-center justify-between p-6 md:p-10">
-        <a href="#home" className="flex items-center" style={{ pointerEvents: 'auto' }}>
-          <span className="font-display font-bold text-3xl tracking-tighter uppercase">Pixico</span>
-        </a>
+  useEffect(() => {
+    if (!mobileOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKeyDown = (event) => { if (event.key === 'Escape') setMobileOpen(false); };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [mobileOpen]);
 
-        <div className="hidden lg:flex items-center gap-12 text-[9px] font-bold uppercase tracking-[0.6em]" style={{ pointerEvents: 'auto' }}>
+  return (
+    <>
+      <nav
+        ref={navRef}
+        className="fixed top-0 left-0 w-full z-[100] text-white"
+        style={{ mixBlendMode: mobileOpen ? 'normal' : 'difference', pointerEvents: 'none' }}
+      >
+        <div className="max-w-[1920px] mx-auto flex items-center justify-between p-6 md:p-10">
+          <a href="#home" className="flex items-center" style={{ pointerEvents: 'auto' }} onClick={() => setMobileOpen(false)}>
+            <span className="font-display font-bold text-3xl tracking-tighter uppercase">Pixico</span>
+          </a>
+
+          <div className="hidden lg:flex items-center gap-12 text-[9px] font-bold uppercase tracking-[0.6em]" style={{ pointerEvents: 'auto' }}>
+            {NAV_LINKS.map(link => (
+              <a key={link.label} href={link.href} className="hover:text-primary transition-all duration-500 relative group">
+                {link.label}
+                <span className="absolute -bottom-2 left-0 w-0 h-[1px] bg-primary group-hover:w-full transition-all duration-500" />
+              </a>
+            ))}
+          </div>
+
+          <Link
+            to="/agendar"
+            className="hidden lg:block relative overflow-hidden bg-white text-black px-10 py-4 text-[10px] font-bold uppercase tracking-widest group"
+            style={{ pointerEvents: 'auto' }}
+          >
+            <span className="relative z-10 group-hover:text-white transition-colors duration-500">Agendar</span>
+            <div className="absolute inset-0 bg-primary translate-y-full group-hover:translate-y-0 transition-transform duration-500 ease-[cubic-bezier(0.25,0.46,0.45,0.94)]" />
+          </Link>
+
+          <button
+            type="button"
+            aria-label={mobileOpen ? 'Fechar menu' : 'Abrir menu'}
+            aria-expanded={mobileOpen}
+            className="lg:hidden text-white"
+            style={{ position: 'relative', zIndex: 110, pointerEvents: 'auto' }}
+            onClick={() => setMobileOpen(open => !open)}
+          >
+            {mobileOpen ? <X size={30} /> : <Menu size={30} />}
+          </button>
+        </div>
+      </nav>
+
+      <div
+        data-testid="mobile-menu"
+        aria-hidden={!mobileOpen}
+        className={`lg:hidden fixed inset-0 z-[90] bg-black backdrop-blur-xl overflow-y-auto transition-all duration-300 ${mobileOpen ? 'opacity-100 visible pointer-events-auto' : 'opacity-0 invisible pointer-events-none'}`}
+      >
+        <div className="min-h-[100dvh] px-8 pt-32 pb-12 flex flex-col items-center justify-center gap-7">
           {NAV_LINKS.map(link => (
-            <a key={link.label} href={link.href} className="hover:text-primary transition-all duration-500 relative group">
+            <a
+              key={link.label}
+              href={link.href}
+              className="text-2xl sm:text-3xl font-display font-bold uppercase tracking-[0.12em] text-white hover:text-primary transition-colors"
+              onClick={() => setMobileOpen(false)}
+            >
               {link.label}
-              <span className="absolute -bottom-2 left-0 w-0 h-[1px] bg-primary group-hover:w-full transition-all duration-500" />
             </a>
           ))}
+          <Link
+            to="/agendar"
+            className="mt-3 bg-primary text-black px-12 py-5 text-sm font-bold uppercase tracking-widest"
+            onClick={() => setMobileOpen(false)}
+          >
+            Agendar
+          </Link>
         </div>
-
-        <Link
-          to="/agendar"
-          className="hidden lg:block relative overflow-hidden bg-white text-black px-10 py-4 text-[10px] font-bold uppercase tracking-widest group"
-          style={{ pointerEvents: 'auto' }}
-        >
-          <span className="relative z-10 group-hover:text-white transition-colors duration-500">Agendar</span>
-          <div className="absolute inset-0 bg-primary translate-y-full group-hover:translate-y-0 transition-transform duration-500 ease-[cubic-bezier(0.25,0.46,0.45,0.94)]" />
-        </Link>
-
-        <button className="lg:hidden" style={{ mixBlendMode: 'normal', position: 'relative', zIndex: 110, pointerEvents: 'auto' }} onClick={() => setMobileOpen(!mobileOpen)}>
-          {mobileOpen ? <X size={28} /> : <Menu size={28} />}
-        </button>
       </div>
-
-      {/* Mobile Menu */}
-      <div
-        className={`lg:hidden fixed inset-0 bg-black/98 backdrop-blur-xl flex flex-col items-center justify-center gap-10 transition-all duration-700 ${mobileOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
-        style={{ mixBlendMode: 'normal', zIndex: 105 }}
-      >
-        {NAV_LINKS.map(link => (
-          <a key={link.label} href={link.href} className="text-3xl font-display font-bold uppercase tracking-wider text-white hover:text-primary transition-colors" onClick={() => setMobileOpen(false)}>
-            {link.label}
-          </a>
-        ))}
-        <Link to="/agendar" className="mt-8 bg-primary text-black px-12 py-5 text-sm font-bold uppercase tracking-widest" onClick={() => setMobileOpen(false)}>
-          Agendar
-        </Link>
-      </div>
-    </nav>
+    </>
   );
 }
 
@@ -195,6 +263,8 @@ function HeroSection() {
    ───────────────────────────────────────────────── */
 function SobreSection() {
   const sectionRef = useRef(null);
+  const imageRef = useRef(null);
+  const mobileImageActive = useMobileCenterActive(imageRef);
 
   useEffect(() => {
     const ctx = gsap.context(() => {
@@ -225,10 +295,15 @@ function SobreSection() {
 
       <div className="max-w-[1600px] mx-auto px-6 md:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-24 items-center">
-          <div className="phil-image relative group">
-            <div className="absolute inset-0 bg-primary/20 translate-x-4 translate-y-4 group-hover:translate-x-8 group-hover:translate-y-8 transition-transform duration-700 clip-diagonal" />
+          <div ref={imageRef} className="phil-image relative group">
+            <div className={`absolute inset-0 bg-primary/20 transition-transform duration-700 clip-diagonal ${mobileImageActive ? 'translate-x-7 translate-y-7' : 'translate-x-4 translate-y-4'} md:translate-x-4 md:translate-y-4 md:group-hover:translate-x-8 md:group-hover:translate-y-8`} />
             <div className="relative aspect-[4/5] overflow-hidden clip-diagonal border border-white/10">
-              <img className="w-full h-full object-cover grayscale brightness-90 transition-all duration-1000 scale-100 group-hover:scale-110 group-hover:rotate-2" src={IMAGES.sobre} alt="Pixico Barber - Sobre" loading="lazy" />
+              <img
+                className={`w-full h-full object-cover transition-all duration-1000 ${mobileImageActive ? 'grayscale-0 brightness-100 scale-110 rotate-1' : 'grayscale brightness-90 scale-100'} md:grayscale md:brightness-90 md:scale-100 md:rotate-0 md:group-hover:scale-110 md:group-hover:rotate-2 md:group-hover:grayscale-0 md:group-hover:brightness-100`}
+                src={IMAGES.sobre}
+                alt="Pixico Barber - Sobre"
+                loading="lazy"
+              />
             </div>
             <div className="absolute -bottom-12 -left-12 vertical-text font-display text-7xl font-bold opacity-5 pointer-events-none hidden lg:block">PRESENÇA</div>
           </div>
@@ -277,6 +352,7 @@ function SobreSection() {
 function ServiceCard({ service, index }) {
   const cardRef = useRef(null);
   const [visible, setVisible] = useState(false);
+  const mobileImageActive = useMobileCenterActive(cardRef);
 
   useEffect(() => {
     const el = cardRef.current;
@@ -325,7 +401,7 @@ function ServiceCard({ service, index }) {
         <div className="relative w-full aspect-[4/3] overflow-hidden">
           <div className="absolute inset-0 bg-primary/10 translate-x-2 translate-y-2 group-hover:translate-x-4 group-hover:translate-y-4 transition-transform duration-700 z-0" />
           <img
-            className="relative z-10 w-full h-full object-cover grayscale brightness-75 transition-all duration-1000 scale-100 group-hover:scale-110 group-hover:grayscale-0 group-hover:brightness-100 group-hover:rotate-1"
+            className={`relative z-10 w-full h-full object-cover transition-all duration-1000 ${mobileImageActive ? 'grayscale-0 brightness-100 scale-110 rotate-1' : 'grayscale brightness-75 scale-100'} md:grayscale md:brightness-75 md:scale-100 md:rotate-0 md:group-hover:scale-110 md:group-hover:grayscale-0 md:group-hover:brightness-100 md:group-hover:rotate-1`}
             src={service.imagem}
             alt={service.title}
             loading="lazy"
@@ -408,34 +484,35 @@ function ServicosSection() {
 /* ─────────────────────────────────────────────────
    GALERIA
    ───────────────────────────────────────────────── */
+function GalleryItem({ src, index, clipClass }) {
+  const itemRef = useRef(null);
+  const mobileActive = useMobileCenterActive(itemRef);
+  const aspect = index === 0 ? 'aspect-[2/3]' : index === 1 ? 'aspect-square md:col-span-2' : index === 2 ? 'aspect-video' : index === 3 ? 'aspect-square' : 'aspect-[3/4]';
+
+  return (
+    <div ref={itemRef} className={`gallery-item ${aspect} overflow-hidden ${clipClass || ''} group`}>
+      <img
+        className={`w-full h-full object-cover transition-all duration-1000 ${mobileActive ? 'brightness-100 grayscale-0 scale-110' : 'grayscale brightness-50 scale-100'} md:grayscale md:brightness-50 md:scale-100 md:group-hover:brightness-100 md:group-hover:grayscale-0 md:group-hover:scale-110`}
+        src={src}
+        alt={`Pixico Galeria ${index + 1}`}
+        loading="lazy"
+      />
+    </div>
+  );
+}
+
 function GaleriaSection() {
   const sectionRef = useRef(null);
 
   useEffect(() => {
-    const mm = gsap.matchMedia();
-
     const ctx = gsap.context(() => {
       gsap.from('.gallery-item', {
         y: 40, opacity: 0, stagger: 0.1, duration: 0.8, ease: 'power3.out',
         scrollTrigger: { trigger: sectionRef.current, start: 'top 75%', toggleActions: 'play none none none' },
       });
-
-      mm.add("(max-width: 767px)", () => {
-        gsap.utils.toArray('.gallery-item').forEach(item => {
-          ScrollTrigger.create({
-            trigger: item,
-            start: 'top 65%',
-            end: 'bottom 35%',
-            toggleClass: { targets: item, className: 'is-revealed' }
-          });
-        });
-      });
     }, sectionRef);
 
-    return () => {
-      ctx.revert();
-      mm.revert();
-    };
+    return () => ctx.revert();
   }, []);
 
   const clipClasses = ['clip-shard', 'clip-diagonal', '', 'clip-abstract', ''];
@@ -450,10 +527,7 @@ function GaleriaSection() {
       <div className="max-w-full mx-auto px-4 overflow-hidden">
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2">
           {IMAGES.galeria.map((src, i) => (
-            <div key={i} className={`gallery-item ${i === 0 ? 'aspect-[2/3]' : i === 1 ? 'aspect-square md:col-span-2' : i === 2 ? 'aspect-video' : i === 3 ? 'aspect-square' : 'aspect-[3/4]'
-              } overflow-hidden ${clipClasses[i] || ''} group`}>
-              <img className="w-full h-full object-cover grayscale brightness-50 md:group-hover:brightness-100 md:group-hover:grayscale-0 md:group-hover:scale-110 group-[.is-revealed]:brightness-100 group-[.is-revealed]:grayscale-0 group-[.is-revealed]:scale-110 transition-all duration-1000" src={src} alt={`Pixico Galeria ${i + 1}`} loading="lazy" />
-            </div>
+            <GalleryItem key={src} src={src} index={i} clipClass={clipClasses[i]} />
           ))}
         </div>
       </div>

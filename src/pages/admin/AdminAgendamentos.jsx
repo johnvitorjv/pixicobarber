@@ -13,6 +13,11 @@ import {
 } from 'lucide-react';
 
 function formatData(d) { if (!d) return ''; const [y, m, dd] = d.split('-'); return `${dd}/${m}/${y}`; }
+function formatDiaSemana(d) {
+    if (!d) return '';
+    const label = new Intl.DateTimeFormat('pt-BR', { weekday: 'long', timeZone: 'America/Bahia' }).format(new Date(`${d}T12:00:00Z`));
+    return label.charAt(0).toUpperCase() + label.slice(1);
+}
 
 export default function AdminAgendamentos() {
     useStoreSync();
@@ -228,7 +233,10 @@ export default function AdminAgendamentos() {
                                             </div>
                                         </td>
                                         <td className="py-4 px-6 font-modern text-zinc-300">{ag.servicoNome}</td>
-                                        <td className="py-4 px-6 font-modern text-zinc-400">{formatData(ag.data)}</td>
+                                        <td className="py-4 px-6 font-modern text-zinc-400">
+                                            <span className="block text-white font-bold capitalize mb-1">{formatDiaSemana(ag.data)}</span>
+                                            <span>{formatData(ag.data)}</span>
+                                        </td>
                                         <td className="py-4 px-6 font-display font-bold text-primary tracking-widest text-xs tabular-nums">{ag.faixaInicio} <span className="text-zinc-600 font-modern font-normal mx-1">—</span> {ag.faixaFim || 'a definir'}</td>
                                         <td className="py-4 px-6">
                                             <span className={`text-[9px] font-bold uppercase tracking-wider ${sc.cor} px-2 py-1 ${sc.bg} inline-block`}>
@@ -281,6 +289,7 @@ export default function AdminAgendamentos() {
                     </h3>
                     <div className="space-y-4 mb-8 bg-white/[0.02] border border-white/5 p-6">
                         <InfoRow label="Serviço" value={modal.ag.servicoNome} />
+                        <InfoRow label="Dia" value={formatDiaSemana(modal.ag.data)} />
                         <InfoRow label="Data" value={formatData(modal.ag.data)} />
                         <InfoRow label="Horário" value={`${modal.ag.faixaInicio} — ${modal.ag.faixaFim || 'a definir'}`} />
                     </div>
@@ -317,6 +326,12 @@ export default function AdminAgendamentos() {
                     <h3 className="font-display font-bold text-2xl uppercase tracking-tighter mb-8 flex items-center gap-3">
                         <XCircle size={24} className="text-red-400" /> Rejeitar Agendamento
                     </h3>
+                    <div className="space-y-3 mb-8 bg-white/[0.02] border border-white/5 p-6">
+                        <InfoRow label="Serviço" value={modal.ag.servicoNome} />
+                        <InfoRow label="Dia" value={formatDiaSemana(modal.ag.data)} />
+                        <InfoRow label="Data" value={formatData(modal.ag.data)} />
+                        <InfoRow label="Horário" value={`${modal.ag.faixaInicio} — ${modal.ag.faixaFim || 'a definir'}`} />
+                    </div>
                     <label className="text-[9px] font-bold uppercase tracking-[0.4em] text-zinc-500 block mb-4">Motivo(s)</label>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
                         {MOTIVOS_REJEICAO.map(m => (

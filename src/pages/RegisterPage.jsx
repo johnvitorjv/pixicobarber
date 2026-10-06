@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/auth';
 import { bahiaDate } from '../lib/bookingRules';
-import { Avatar } from '../components/PhotoUpload';
+import PhotoUpload from '../components/PhotoUpload';
 import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
 
 export default function RegisterPage() {
@@ -12,6 +12,8 @@ export default function RegisterPage() {
     const [erro, setErro] = useState('');
     const [message, setMessage] = useState('');
     const [loading, setLoading] = useState(false);
+    const [fotoUrl, setFotoUrl] = useState('');
+    const [fotoErro, setFotoErro] = useState('');
     const [form, setForm] = useState({
         nome: '',
         sobrenome: '',
@@ -35,6 +37,13 @@ export default function RegisterPage() {
         setMessage('');
 
         // Validações
+        if (!fotoUrl) {
+            setFotoErro('Adicione uma foto de perfil para continuar.');
+            setErro('A foto de perfil é obrigatória para o cadastro.');
+            setLoading(false);
+            return;
+        }
+
         if (!form.nome.trim() || !form.sobrenome.trim() || !/^\d{10,13}$/.test(form.whatsapp.replace(/\D/g, '')) || !form.email.trim() || !form.senha) {
             setErro('Preencha todos os campos obrigatórios.');
             setLoading(false);
@@ -54,7 +63,7 @@ export default function RegisterPage() {
         }
 
         try {
-            const result = await registrar(form);
+            const result = await registrar({ ...form, fotoUrl });
             if (result.needsConfirmation) {
                 setMessage(result.message);
             } else if (result.success) {
@@ -97,10 +106,19 @@ export default function RegisterPage() {
                     )}
 
                     <form onSubmit={handleSubmit} className="space-y-5">
-                        {/* Foto é adicionada após autenticação para não inflar metadados/JWT. */}
+                        {/* Foto obrigatória para identificação do cliente pelo profissional. */}
                         <div className="flex flex-col items-center gap-3 mb-2">
-                            <Avatar initials={initials} size="lg" />
-                            <p className="text-xs text-zinc-500 text-center">Você poderá adicionar sua foto pelo painel após entrar.</p>
+                            <PhotoUpload
+                                value={fotoUrl}
+                                onChange={(value) => { setFotoUrl(value); setFotoErro(''); setErro(''); }}
+                                initials={initials}
+                                required
+                                error={fotoErro}
+                                size="lg"
+                            />
+                            <p className="text-xs text-zinc-500 text-center max-w-sm">
+                                Foto obrigatória. Ela ajuda o barbeiro a reconhecer você mesmo quando usa apelido ou nome diferente no dia a dia.
+                            </p>
                         </div>
 
                         {/* Nome + Sobrenome */}
