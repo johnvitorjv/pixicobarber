@@ -1,8 +1,113 @@
 # PIXICO Barber — auditoria e conclusão técnica
 
-Atualizado em 02/10/2026, America/Bahia. Branch: `finalizacao-pixico`.
+Atualizado em 06/10/2026, America/Bahia. Branch: `finalizacao-pixico`.
 Escopo autorizado: arquivos e commits locais. Nenhum push, deploy, alteração de
 Cloudflare ou execução de SQL remoto foi realizado.
+
+## Finalização das regras confirmadas — 06/10/2026
+
+Esta seção substitui os números de validação e as regras da auditoria de 02/10
+registrada abaixo. Trabalho restrito a este repositório, sem acesso a produção,
+sem push, sem instalação de dependências e sem audit online nesta etapa.
+
+Os commits `49b38b5` e `f97862e` foram revisados e preservados. A continuação
+partiu dos três arquivos pendentes existentes; não repetiu a auditoria completa
+nem introduziu novas funcionalidades. Documentação pública de Supabase/PostgreSQL
+foi consultada; nenhum projeto remoto foi conectado.
+
+- PIXICO Barber; WhatsApp **5571994096863**; endereço **R. da Palestina, 297c -
+  Itacaranha, Salvador - BA, 40713-660**.
+- Terça a sábado, 09:00–20:00; pausa padrão 13:00–15:30; domingo/segunda fechados.
+  Inícios na grade absoluta de 15 minutos (:00/:15/:30/:45). Toda a duração deve
+  caber em um intervalo livre. Sem limites artificiais por dia ou turno.
+- Exceção de data contém `disponivel`, `intervalos` e `bloqueios`, com múltiplas
+  faixas e precisão de minuto. Substitui integralmente dias, expediente, pausa,
+  férias e fechamentos globais. O admin deve incluir a pausa desejada na exceção.
+  Feriados são decididos manualmente; não há calendário automático de feriados.
+- Salvar/retirar exceção, mudar expediente ou dias permitidos de serviço é
+  rejeitado atomicamente se invalidar reserva ativa futura, inclusive iniciada
+  e ainda não encerrada. O erro informa reserva/data; remarque ou cancele primeiro.
+  Propostas e solicitações sem reserva são revalidadas ao confirmar/aceitar.
+- Catálogo: 18 serviços confirmados, preços/durações testados individualmente.
+  Corte criança: R$ 50 / 45 min, somente terça/quarta/quinta, mesmo com domingo
+  aberto. Bigodin: R$ 5 / 5 min, mantendo inícios a cada 15 min. Freestyle:
+  R$ 5 / 30 min, exatamente como informado. Pigmentação: R$ 20 / 15 min de cadeira.
+- Platinado (R$ 100) e Luzes (R$ 80): duração variável, aplicação aproximada de
+  15 min **não é término do atendimento**. Pedido `solicitado`, término nulo,
+  sem reserva garantida; aparece na fila administrativa e no painel do cliente.
+  Admin define data/início/fim ocupado para confirmar, incluindo processamento
+  e lavagem. Ocupação conservadora contínua de **30 a 480 min**, sem sobreposição
+  ou passagem por bloqueio/pausa. Esse mínimo de 30 min é uma proteção técnica
+  interpretada, a validar com o profissional; não é duração química prometida.
+  Não há aproveitamento automático de tempo de processamento para outro cliente.
+- Migração alterada somente em `202610010001_production_foundation.sql`, sem
+  aplicação remota. Preserva histórico antes de atualizar preços; reutiliza UUIDs
+  por nome normalizado/aliases; mantém fotos, perfis, usuários e Storage. Serviços
+  desconhecidos são preservados. Duplicatas ambíguas, conflitos de horário ou
+  químicos ativos futuros legados abortam tudo para revisão, sem apagar dados.
+  Reservas fixas existentes preservam sua duração ocupada ao remarcar, mesmo se
+  o catálogo mudar. RLS, grants, roles, notas privadas, notificações e exclusão
+  GiST foram preservados; o lock transacional também cobre mudanças em serviços.
+
+Revisão final desta continuação:
+
+- Backfill usa o preço promocional disponível antes de atualizar o catálogo,
+  preservando valores já registrados. Continua sem recuperar com certeza um preço
+  histórico nunca salvo. Duração legada é preservada como intervalo, sem arredondar
+  segundos ao remarcar. Permissões de funções privadas de outros usos são mantidas.
+- Foundation aborta antes das alterações se já houver tabelas da fundação ou se
+  faltar o trigger legado de cadastro habilitado. Se uma versão anterior já foi
+  aplicada, será necessário SQL incremental revisado, não executar este arquivo.
+- Preflight acompanha os dois schemas: somente leitura/ROLLBACK, timeouts, RLS,
+  triggers, versões/extensões, aliases ambíguos, químicos ativos e reservas a
+  revisar perante os novos padrões. Relatórios de padrões não consideram overrides
+  como justificativa automática; os resultados exigem revisão do operador.
+- Pedido químico sem reserva pode ser cancelado mesmo após o horário preferido.
+  Admin valida data, início na grade e ocupação completa antes de enviar; conflito
+  mantém os campos para retry. O modal apresenta o erro da ação uma única vez.
+- Calendário desconsidera pedidos sem fim/cancelados/rejeitados ao calcular sua
+  extensão. Restaurar exceção usa o tratamento de gravação confirmada do cache;
+  releitura falha fica no aviso compartilhado, sem sugerir nova exclusão.
+- Testes SQL têm fixtures isoladas; quatro cenários antes dependentes da ordem
+  também passaram executados sozinhos. PWA aguarda o reload real antes de consultar
+  caches, corrigindo a corrida observada. Passou em três repetições completas.
+- Nenhum auxiliar temporário de edição ficou no repositório. Os dois scripts em
+  `scripts/` são usados pelo build e foram mantidos. Não houve refatoração visual.
+
+Validação final desta etapa: **50 testes Node/SQL**, **20 cenários de navegador** e
+**2 de PWA** (72 distintos), todos aprovados; lint, build e `git diff --check`. SQL executado em
+PGlite descartável, incluindo rollback, preservação de legado, catálogo completo,
+exceções, restrições, pedidos químicos e duas inserções concorrentes na fila local.
+O teste de exclusão também contorna o trigger para provar a constraint independente.
+PGlite serializa consultas: **não valida disputa real entre duas conexões**.
+Os testes funcionais usam somente backend simulado local e bloqueiam HTTP externo.
+Build/Chromium foram executados localmente, com backend somente em localhost.
+Nenhum Supabase produtivo, Cloudflare ou GitHub remoto foi acessado. Fontes externas
+existentes no HTML não foram alteradas; os testes de navegador/PWA bloqueiam HTTP
+fora de localhost. Scan do bundle não detectou chave privilegiada; somente
+`.env.example` está versionado. Audit online não foi repetido; o resultado de
+02/10 abaixo é histórico. Build final sem aviso de chunk grande.
+
+Próximo passo seguro: somente com autorização específica, homologar em PostgreSQL/Supabase descartável
+isolado de produção, com cópia revisada do legado, duas conexões concorrentes e
+PostgREST/RPC reais. Confirmar duração química, possíveis aliases de catálogo,
+dados conflitantes e overrides antes de qualquer autorização de produção.
+Não publicar frontend novo contra schema antigo. Roteiro em RELEASE_CHECKLIST.md.
+
+Arquivos da entrega acumulada de regras e revisão (21):
+
+| Área | Arquivos |
+|---|---|
+| Banco | `supabase/migrations/202610010001_production_foundation.sql`, `supabase/preflight.sql` |
+| Regras e dados | `src/lib/bookingRules.js`, `src/hooks/useSupabase.js`, `src/data/models.js`, `src/stores/availabilityStore.js`, `src/stores/settingsStore.js` |
+| Cliente | `src/pages/BookingPage.jsx`, `src/pages/DashboardPage.jsx` |
+| Admin | `src/components/DayOverrideEditor.jsx`, `src/pages/admin/AdminDisponibilidade.jsx`, `src/pages/admin/AdminAgendamentos.jsx`, `src/pages/admin/AdminCalendario.jsx`, `src/pages/admin/AdminDashboard.jsx`, `src/pages/admin/AdminServicos.jsx` |
+| Testes | `tests/database.test.js`, `tests/rules.test.js`, `tests/e2e/flows.spec.js`, `tests/pwa/offline.spec.js` |
+| Documentação | `PROJECT_STATUS.md`, `RELEASE_CHECKLIST.md` |
+
+Capturas locais de QA (não versionadas): `test-results/date-override-mobile.png`
+e `test-results/chemical-confirmation-mobile.png`. Editor de exceções e modal de
+confirmação química revisados a 390 px, com a identidade visual existente.
 
 ## Ambiente e localização do trabalho
 
@@ -68,7 +173,7 @@ A árvore completa instalada inicialmente também continha vulnerabilidades.
   Logout normal é local; recuperação de senha solicita revogação global.
 - Agenda usa slots do servidor e duração/preço promocional reais. Guard de envio
   duplo, conflito acionável e formulário preservado quando gravação falha.
-- Regras remotas: dias/horários, almoço, férias, bloqueios, limites diário/turno e
+- Regras remotas: dias/horários, almoço, férias, bloqueios, exceções completas e
   janela de 60 dias no fuso America/Bahia.
 - Exclusão PostgreSQL de intervalos sobrepostos, inclusive serviços de duração
   diferente; lock transacional coordena reservas e alteração de regras.
@@ -131,14 +236,15 @@ evolução de schema e escopo, não apenas um filtro de frontend.
   coordenada; rollback não deve restaurar policies vulneráveis.
 - PGlite testa SQL PostgreSQL real em ambiente descartável com Auth/Storage simulados.
   Não reproduz GoTrue, PostgREST nem duas conexões PostgreSQL simultâneas.
-  A exclusão é testada; disputa real de locks/capacidade exige staging.
+  A exclusão é testada; disputa real de locks exige staging.
 - Testes de navegador funcional usam HTTP simulado. PWA usa build/SW reais.
   Headers de Cloudflare e experiência física mobile exigem validação externa.
 - Tokens JWT já emitidos podem valer até expirar, mesmo com refresh revogado.
 - Bucket público legado mantém fotos públicas. Policies desconhecidas adicionais
   de Storage e funções SECURITY DEFINER reais precisam de auditoria no preflight.
 - Domínio Supabase customizado exige ajuste explícito da CSP antes de publicar.
-- Fechar horário impede novas reservas; não cancela nem apaga as já existentes.
+- Fechar horário com reserva ativa incompatível é rejeitado; exige remarcação ou
+  cancelamento explícito anterior, sem apagar histórico.
 
 ## Prioridades
 
@@ -163,7 +269,7 @@ evolução de schema e escopo, não apenas um filtro de frontend.
 | UX | P2 | Acessibilidade/observabilidade/telemetria completa | Parcial; pendente |
 | CLEAN | P3 | Refinamentos mantendo identidade | Mocks/factories/fallbacks removidos; opcionais pendentes |
 
-## Validação
+## Validação da auditoria anterior (02/10; resultados atuais acima)
 
 - **43 testes distintos aprovados**: 29 testes Node/SQL, 12 cenários funcionais
   Playwright e 2 cenários de PWA. Cadastro/login também passaram em 6 repetições

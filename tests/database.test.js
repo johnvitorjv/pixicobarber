@@ -1,4 +1,4 @@
-import { test, before, after } from 'node:test';
+import { test, before, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
@@ -21,7 +21,7 @@ const bootstrapSQL = `
       create function storage.foldername(text) returns text[] language sql as $$ select string_to_array($1,'/') $$;
       create publication supabase_realtime;
     `;
-let day, seededConfig, seededCatalog, seededBusiness;
+let day, seededConfig, seededCatalog, seededBusiness, fixtureServices;
 before(async () => {
     db = new PGlite({ extensions: { btree_gist } });
     await db.exec(bootstrapSQL);
@@ -33,9 +33,21 @@ before(async () => {
     await db.query(`insert into auth.users(id,email,raw_user_meta_data) values($1,'alice@example.invalid','{"nome":"Alice","sobrenome":"Teste","role":"admin"}'),($2,'bob@example.invalid','{"nome":"Bob","sobrenome":"Teste"}'),($3,'admin@example.invalid','{"nome":"Admin","sobrenome":"Teste"}')`, [alice,bob,admin]);
     await db.query(`update public.profiles set role = 'admin' where id = $1`,[admin]);
     await db.query(`insert into public.services(id,nome,preco,duracao,categoria) values($1,'Teste 45m',60,45,'corte')`,[service]);
+    fixtureServices = (await db.query('select * from public.services')).rows;
     day = (await db.query(`select (timezone('America/Bahia',now())::date + 7)::text as day`)).rows[0].day;
     // Deterministic test schedule independent of day of week.
     await db.exec(`update public.schedule_config set data = jsonb_set(data,'{diasFuncionamento}','[0,1,2,3,4,5,6]')`);
+});
+// Each scenario owns its disposable fixtures, including when run in isolation.
+beforeEach(async () => {
+    await db.exec(`reset role; select set_config('test.uid','',false);
+      delete from public.appointment_events; delete from public.notifications;
+      delete from public.appointments; delete from public.day_overrides;
+      delete from public.services;
+      update public.profiles set blacklist=false,favorito=false;`);
+    await db.query('insert into public.services select * from jsonb_populate_recordset(null::public.services,$1::jsonb)',[JSON.stringify(fixtureServices)]);
+    await db.query('update public.schedule_config set data=$1',[JSON.stringify({...seededConfig,diasFuncionamento:[0,1,2,3,4,5,6]})]);
+    await db.query('update public.business_settings set data=$1',[JSON.stringify(seededBusiness)]);
 });
 after(async () => { await db?.close(); });
 
@@ -76,19 +88,23 @@ test('first reservation wins; overlapping second reservation rejected; adjacent 
     await book(alice,'09:00','09:45');
     await assert.rejects(book(bob,'09:00','09:45'),/indisponível/);
     await assert.rejects(book(bob,'09:30','10:15'),/indisponível/);
-    await book(bob,'10:00','10:45');
+    await book(bob,'09:45','10:30');
     const slots = await asUser(bob, () => db.query('select * from public.get_available_slots($1,$2)',[day,service]));
     assert.equal(slots.rows.find(s => s.inicio === '09:30').disponivel,false);
     assert.equal(slots.rows.find(s => s.inicio === '11:00').disponivel,true);
     assert.deepEqual(Object.keys(slots.rows[0]).sort(), ['disponivel','fim','id','inicio']);
 });
 test('RLS hides another client appointments and blocks foreign updates',async () => {
+    await book(alice,'09:00','09:45');
+    await book(bob,'10:00','10:45');
     const visible = await asUser(alice, () => db.query('select cliente_id from public.appointments'));
+    assert.equal(visible.rows.length,1);
     assert.ok(visible.rows.every(a => a.cliente_id === alice));
     const updates = await asUser(alice, () => db.query(`update public.appointments set status='cancelado_cliente' where cliente_id=$1 returning id`,[bob]));
     assert.equal(updates.rows.length,0);
 });
 test('cancel releases slot and ignores unauthorized time/price edits',async () => {
+    await book(alice,'09:00','09:45');
     await asUser(alice, () => db.query(`update public.appointments set status='cancelado_cliente',faixa_inicio='15:00',faixa_fim='15:45',valor_cobrado=1 where cliente_id=$1`,[alice]));
     const original = (await db.query('select faixa_inicio,valor_cobrado from public.appointments where cliente_id=$1',[alice])).rows[0];
     assert.equal(original.faixa_inicio,'09:00:00'); assert.equal(original.valor_cobrado,null);
@@ -113,6 +129,8 @@ test('blacklist enforced; obsolete daily and shift caps ignored',async () => {
     await db.exec(`update public.schedule_config set data=jsonb_set(data,'{limiteClientesDia}','16')`);
 });
 test('notifications and audit trail generated atomically and read state alone is mutable',async () => {
+    const appointment = (await book(alice,'09:00','09:45')).rows[0];
+    await asUser(admin, () => db.query("update public.appointments set status='confirmado' where id=$1",[appointment.id]));
     const rows = await asUser(alice, () => db.query('select * from public.notifications'));
     assert.ok(rows.rows.length >= 2);
     assert.ok(rows.rows.every(n => n.destinatario === alice && !n.para_admin));
@@ -269,6 +287,9 @@ test('Sunday and Monday are closed by default but can open with custom hours; cl
 });
 test('rule edits and override deletion reject conflicts atomically; unrelated edits succeed',async () => {
     const date=await dateOffset(10);
+    await override(date,{disponivel:true,intervalos:[{inicio:'07:00',fim:'12:00'}],bloqueios:[]});
+    await book(alice,'07:15','08:00',date);
+    await book(bob,'09:00','09:45',await dateOffset(11));
     await assert.rejects(override(date,closedDay),/Regra invalida agendamento/);
     await assert.rejects(asUser(admin,()=>db.query('delete from public.day_overrides where data=$1',[date])),/Regra invalida agendamento/);
     assert.equal((await db.query('select value from public.day_overrides where data=$1',[date])).rows[0].value.disponivel,true);
@@ -291,8 +312,8 @@ test('child haircut weekdays enforced on insert, proposal and slot RPC even on a
     const friday=(await db.query(`select d::date::text as d from generate_series($1::date+24,$1::date+30,'1 day') d where extract(dow from d)=5`,[day])).rows[0].d;
     await assert.rejects(asUser(admin,()=>db.query(`update public.appointments set status='aguardando_cliente',sugestao_data=$1,sugestao_inicio='10:00',sugestao_fim='10:45' where id=$2`,[friday,childBooking.id])),/dia da semana/);
 });
-test('chemical requests have no end, guarantee or occupancy; only admin can atomically confirm full occupied interval',async () => {
-    const chemical=seededCatalog.find(s=>s.nome==='Platinado').id, date=await dateOffset(32);
+for (const chemicalName of ['Platinado','Luzes']) test(`${chemicalName} has no end or occupancy until admin confirms the full interval`,async () => {
+    const chemical=seededCatalog.find(s=>s.nome===chemicalName).id, date=await dateOffset(32);
     await override(date,{disponivel:true,intervalos:[{inicio:'09:00',fim:'13:00'},{inicio:'15:30',fim:'20:00'}],bloqueios:[]});
     const slots=(await asUser(alice,()=>db.query('select * from public.get_available_slots($1,$2)',[date,chemical]))).rows;
     assert.ok(slots.length>0&&slots.every(s=>s.fim===null));
@@ -314,6 +335,16 @@ test('chemical requests have no end, guarantee or occupancy; only admin can atom
     const request=(await bookService(chemical,date,'11:00',null,'solicitado')).rows[0];
     await asUser(alice,()=>db.query(`update public.appointments set status='cancelado_cliente' where id=$1`,[request.id]));
 });
+test('expired chemical preference remains cancellable because it never occupied a slot',async () => {
+    const chemical=seededCatalog.find(s=>s.nome==='Luzes').id, date=await dateOffset(35);
+    const row=(await bookService(chemical,date,'09:00',null,'solicitado')).rows[0];
+    await db.exec('alter table public.appointments disable trigger validate_appointment');
+    try { await db.query("update public.appointments set data='2020-01-01' where id=$1",[row.id]); }
+    finally { await db.exec('alter table public.appointments enable trigger validate_appointment'); }
+    await asUser(alice,()=>db.query("update public.appointments set status='cancelado_cliente' where id=$1",[row.id]));
+    assert.deepEqual((await db.query('select status,faixa_fim from public.appointments where id=$1',[row.id])).rows[0],{status:'cancelado_cliente',faixa_fim:null});
+});
+
 test('more than old daily/shift caps fits; 5m Bigodin still starts every 15m',async()=>{
     const date=await dateOffset(33), bigodin=seededCatalog.find(s=>s.nome==='Bigodin').id;
     await override(date,{disponivel:true,intervalos:[{inicio:'09:00',fim:'13:00'},{inicio:'15:30',fim:'20:00'}],bloqueios:[]});
@@ -347,16 +378,21 @@ test('legacy migration reuses normalized service UUID and preserves users, profi
     try {
         await legacy.exec(bootstrapSQL);await legacy.exec(await readFile(new URL('../supabase/schema.sql',import.meta.url),'utf8'));
         await legacy.query(`insert into auth.users(id,email,raw_user_meta_data) values($1,'legacy@example.invalid','{"nome":"Legacy","sobrenome":"Test","role":"client"}')`,[alice]);
-        await legacy.query(`insert into public.services(id,nome,preco,duracao,categoria,imagem_url) values($1,' CORTE ',77,45,'corte','legacy-image')`,[service]);
-        await legacy.query(`insert into public.appointments(cliente_id,servico_id,data,faixa_inicio,faixa_fim,status) values($1,$2,'2020-01-01','09:00','09:45','concluido')`,[alice,service]);
+        await legacy.query(`insert into public.services(id,nome,preco,preco_promocional,duracao,categoria,imagem_url) values($1,' CORTE ',77,70,45,'corte','legacy-image')`,[service]);
+        await legacy.query(`insert into public.appointments(cliente_id,servico_id,data,faixa_inicio,faixa_fim,status) values($1,$2,'2020-01-01','09:00','09:45:30','concluido')`,[alice,service]);
+        await legacy.exec(`create schema private;
+          create function private.other_app() returns int language sql as 'select 1';
+          grant usage on schema private to authenticated;
+          grant execute on function private.other_app() to authenticated;`);
         await legacy.exec(`insert into storage.objects(bucket_id,name) values('pixico-media','legacy.jpg')`);
         await legacy.exec(await readFile(new URL('../supabase/migrations/202610010001_production_foundation.sql',import.meta.url),'utf8'));
         assert.equal((await legacy.query('select count(*)::int as n from public.services')).rows[0].n,18);
         assert.deepEqual((await legacy.query('select nome,preco::text,duracao,imagem_url from public.services where id=$1',[service])).rows[0],{nome:'Corte',preco:'30.00',duracao:30,imagem_url:'legacy-image'});
         const a=(await legacy.query('select servico_id,preco_reservado::text,servico_nome_reservado,faixa_inicio,faixa_fim from public.appointments')).rows[0];
-        assert.deepEqual(a,{servico_id:service,preco_reservado:'77.00',servico_nome_reservado:' CORTE ',faixa_inicio:'09:00:00',faixa_fim:'09:45:00'});
+        assert.deepEqual(a,{servico_id:service,preco_reservado:'70.00',servico_nome_reservado:' CORTE ',faixa_inicio:'09:00:00',faixa_fim:'09:45:30'});
         assert.equal((await legacy.query('select nome from public.profiles where id=$1',[alice])).rows[0].nome,'Legacy');
         assert.equal((await legacy.query('select name from storage.objects')).rows[0].name,'legacy.jpg');
+        assert.equal((await legacy.query("select has_function_privilege('authenticated','private.other_app()','EXECUTE') as allowed")).rows[0].allowed,true);
     } finally {await legacy.close();}
 });
 
@@ -374,5 +410,64 @@ test('ambiguous legacy catalog and future chemical occupancy abort migration ato
         await legacy.exec(`insert into public.services(nome,preco,duracao,categoria) values(' PLATINADO ',100,15,'tratamento')`);
         await assert.rejects(legacy.exec(migration),/Catálogo ambíguo/); await legacy.exec('rollback');
         assert.equal((await legacy.query('select count(*)::int as n from public.services')).rows[0].n,2);
+    } finally {await legacy.close();}
+});
+
+test('preflight remains read-only on final schema and recognizes null-end chemical requests',async () => {
+    const chemical=seededCatalog.find(s=>s.nome==='Luzes').id;
+    await bookService(chemical,await dateOffset(36),'09:00',null,'solicitado');
+    const before=(await db.query('select count(*)::int as n from public.appointments')).rows[0].n;
+    const results=await db.exec(await readFile(new URL('../supabase/preflight.sql',import.meta.url),'utf8'));
+    assert.equal(results.find(r=>r.rows?.[0]?.leitura_somente).rows[0].leitura_somente,'on');
+    assert.equal(Number(results.find(r=>r.rows?.[0]?.agendamentos_invalidos!==undefined).rows[0].agendamentos_invalidos),0);
+    assert.equal((await db.query('select count(*)::int as n from public.appointments')).rows[0].n,before);
+});
+
+test('preflight runs against untouched legacy schema and reports catalog alias ambiguity without migrating',async () => {
+    const legacy=new PGlite({extensions:{btree_gist}});
+    try {
+        await legacy.exec(bootstrapSQL);
+        await legacy.exec(await readFile(new URL('../supabase/schema.sql',import.meta.url),'utf8'));
+        await legacy.exec(`insert into public.services(nome,preco,duracao,categoria) values
+          ('Corte infantil',50,45,'corte'),('Corte criança',50,45,'corte');`);
+        const results=await legacy.exec(await readFile(new URL('../supabase/preflight.sql',import.meta.url),'utf8'));
+        const aliases=results.flatMap(r=>r.rows||[]).find(r=>r.catalogo_ambiguo==='cortecrianca');
+        assert.equal(aliases.ids.length,2);
+        assert.equal((await legacy.query("select to_regclass('public.schedule_config') as t")).rows[0].t,null);
+        assert.equal((await legacy.query('select count(*)::int as n from public.services')).rows[0].n,2);
+    } finally {await legacy.close();}
+});
+
+test('rescheduling legacy occupancy preserves fractional minutes after a catalog duration change',async () => {
+    const date=await dateOffset(37), proposed=await dateOffset(38);
+    const row=(await book(alice,'09:00','09:45',date)).rows[0];
+    await db.exec('alter table public.appointments disable trigger validate_appointment');
+    try { await db.query("update public.appointments set faixa_fim='09:45:30' where id=$1",[row.id]); }
+    finally {await db.exec('alter table public.appointments enable trigger validate_appointment');}
+    await asUser(admin,()=>db.query('update public.services set duracao=30 where id=$1',[service]));
+    await asUser(admin,()=>db.query("update public.appointments set status='aguardando_cliente',sugestao_data=$1,sugestao_inicio='10:00',sugestao_fim='10:45:30' where id=$2",[proposed,row.id]));
+    await asUser(alice,()=>db.query("update public.appointments set status='confirmado' where id=$1",[row.id]));
+    assert.equal((await db.query('select faixa_fim from public.appointments where id=$1',[row.id])).rows[0].faixa_fim,'10:45:30');
+});
+
+test('foundation replay fails before changes; original rules, RLS and catalog remain intact',async () => {
+    const migration=await readFile(new URL('../supabase/migrations/202610010001_production_foundation.sql',import.meta.url),'utf8');
+    const before=(await db.query('select data from public.schedule_config')).rows[0].data;
+    await assert.rejects(db.exec(migration),/Foundation já instalada/);
+    await db.exec('rollback');
+    assert.deepEqual((await db.query('select data from public.schedule_config')).rows[0].data,before);
+    assert.equal((await db.query('select count(*)::int as n from public.services')).rows[0].n,19);
+    assert.equal((await db.query("select relrowsecurity as rls from pg_class where oid='public.appointments'::regclass")).rows[0].rls,true);
+});
+
+test('missing signup trigger aborts foundation without modifying the legacy database',async () => {
+    const legacy=new PGlite({extensions:{btree_gist}});
+    try {
+        await legacy.exec(bootstrapSQL);await legacy.exec(await readFile(new URL('../supabase/schema.sql',import.meta.url),'utf8'));
+        await legacy.exec('drop trigger on_auth_user_created on auth.users');
+        await assert.rejects(legacy.exec(await readFile(new URL('../supabase/migrations/202610010001_production_foundation.sql',import.meta.url),'utf8')),/Trigger de cadastro legado/);
+        await legacy.exec('rollback');
+        assert.equal((await legacy.query("select to_regclass('public.schedule_config') as t")).rows[0].t,null);
+        assert.equal((await legacy.query("select count(*)::int as n from information_schema.columns where table_schema='public' and table_name='services' and column_name='confirmacao_manual'")).rows[0].n,0);
     } finally {await legacy.close();}
 });

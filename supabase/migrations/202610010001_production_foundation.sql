@@ -1,6 +1,18 @@
 -- Run only after preflight, backup and explicit approval. Entire change is atomic.
 -- Compatible with the repository's schema.sql, with or without fix_definitivo.sql.
 begin;
+-- This file has never been applied remotely by this task. Do not replay a changed
+-- foundation over an installed release: that requires a separate incremental plan.
+do $$ begin
+  if to_regclass('public.business_settings') is not null or to_regclass('public.schedule_config') is not null then
+    raise exception 'Foundation já instalada ou schema incompatível. Não reaplique; prepare migration incremental após revisão.';
+  end if;
+  if not exists(select 1 from pg_trigger where tgrelid=to_regclass('auth.users')
+    and tgfoid=to_regprocedure('public.handle_new_user()') and not tgisinternal
+    and (tgtype & 5)=5 and (tgtype & 2)=0 and tgenabled in ('O','A')) then
+    raise exception 'Trigger de cadastro legado ausente ou desativado. Revise o preflight antes de migrar.';
+  end if;
+end $$;
 create extension if not exists btree_gist;
 create schema if not exists private;
 revoke all on schema private from public;
@@ -90,7 +102,7 @@ alter table public.appointments add column if not exists sugestao_data date;
 alter table public.appointments add column if not exists sugestao_inicio time;
 alter table public.appointments add column if not exists sugestao_fim time;
 -- Preserve original appointment dates/times and all data. Abort if legacy data violates constraints.
-update public.appointments a set preco_reservado = coalesce(a.preco_reservado,s.preco), servico_nome_reservado = coalesce(a.servico_nome_reservado,s.nome)
+update public.appointments a set preco_reservado = coalesce(a.preco_reservado,s.preco_promocional,s.preco), servico_nome_reservado = coalesce(a.servico_nome_reservado,s.nome)
 from public.services s where s.id = a.servico_id and (a.preco_reservado is null or a.servico_nome_reservado is null);
 -- Snapshot legacy prices BEFORE updating the catalog. Keep UUIDs, images and history.
 alter table public.services add column if not exists dias_permitidos integer[] not null default '{0,1,2,3,4,5,6}';
@@ -328,13 +340,13 @@ select private.assert_existing_schedule();
 
 create or replace function private.validate_appointment() returns trigger
 language plpgsql security definer set search_path = '' as $$
-declare s public.services; admin boolean := private.is_admin(); expected_end time; occupied_minutes int;
+declare s public.services; admin boolean := private.is_admin(); expected_end time; occupied_duration interval;
 begin
   if auth.uid() is null then raise exception 'Autenticação necessária' using errcode = '42501'; end if;
   select * into s from public.services where id = new.servico_id;
-  occupied_minutes := s.duracao;
+  occupied_duration := make_interval(mins => s.duracao);
   if tg_op = 'UPDATE' and not old.confirmacao_manual then
-    occupied_minutes := extract(epoch from (old.faixa_fim-old.faixa_inicio))::int / 60;
+    occupied_duration := old.faixa_fim-old.faixa_inicio;
   end if;
   if tg_op = 'INSERT' then
     if not admin and (new.cliente_id <> auth.uid() or new.status <> case when s.confirmacao_manual then 'solicitado' else 'pendente' end) then raise exception 'Pedido inválido' using errcode = '42501'; end if;
@@ -369,7 +381,7 @@ begin
         new.data := old.sugestao_data; new.faixa_inicio := old.sugestao_inicio; new.faixa_fim := old.sugestao_fim;
         new.sugestao_data := null; new.sugestao_inicio := null; new.sugestao_fim := null;
       else raise exception 'Transição não permitida' using errcode = '42501'; end if;
-      if old.data + old.faixa_inicio <= timezone('America/Bahia',now()) then raise exception 'Horário já iniciado'; end if;
+      if old.status <> 'solicitado' and old.data + old.faixa_inicio <= timezone('America/Bahia',now()) then raise exception 'Horário já iniciado'; end if;
     elsif new.status is distinct from old.status then
       if old.status in ('concluido','ausente','rejeitado','cancelado_cliente','cancelado_admin') then raise exception 'Agendamento encerrado'; end if;
       if new.status in ('concluido','ausente') and old.status not in ('confirmado','remarcado') then raise exception 'Confirme o atendimento primeiro'; end if;
@@ -388,7 +400,7 @@ begin
     if new.sugestao_data is null or new.sugestao_inicio is null or new.sugestao_fim is null then raise exception 'Preencha a proposta de remarcação'; end if;
     if not private.slot_allowed(new.sugestao_data,new.sugestao_inicio,new.sugestao_fim,new.id) then raise exception 'Proposta indisponível'; end if;
     if not extract(dow from new.sugestao_data)::int = any(s.dias_permitidos) then raise exception 'Serviço não permitido neste dia da semana'; end if;
-    if (not new.confirmacao_manual and new.sugestao_fim - new.sugestao_inicio <> make_interval(mins => occupied_minutes)) or
+    if (not new.confirmacao_manual and new.sugestao_fim - new.sugestao_inicio <> occupied_duration) or
        (new.confirmacao_manual and new.sugestao_fim - new.sugestao_inicio not between interval '30 minutes' and interval '8 hours') then raise exception 'Duração da proposta inválida'; end if;
   end if;
   if new.status = 'concluido' and (new.valor_cobrado is null or new.forma_pagamento is null) then raise exception 'Informe cobrança e pagamento'; end if;
@@ -402,7 +414,7 @@ begin
           raise exception 'Informe ocupação química total de 30 a 480 minutos, incluindo processamento e lavagem';
         end if;
       elsif tg_op='INSERT' or (new.data,new.faixa_inicio,new.faixa_fim) is distinct from (old.data,old.faixa_inicio,old.faixa_fim) then
-        expected_end := (new.faixa_inicio + make_interval(mins => occupied_minutes))::time;
+        expected_end := (new.faixa_inicio + occupied_duration)::time;
         if new.faixa_fim is null or new.faixa_fim <> expected_end or new.faixa_fim <= new.faixa_inicio then raise exception 'Duração inválida'; end if;
       end if;
       if not private.slot_allowed(new.data,new.faixa_inicio,new.faixa_fim,new.id) then raise exception 'Horário indisponível' using errcode = '23P01'; end if;
@@ -531,7 +543,12 @@ create policy pixico_profile_update on storage.objects for update to authenticat
  using(bucket_id = 'pixico-media' and (storage.foldername(name))[1] = 'profiles' and (storage.foldername(name))[2] = auth.uid()::text)
  with check(bucket_id = 'pixico-media' and (storage.foldername(name))[1] = 'profiles' and (storage.foldername(name))[2] = auth.uid()::text);
 
-revoke all on all functions in schema private from public,anon,authenticated;
+-- Revoke only PIXICO internals; an existing private schema may contain other apps.
+revoke all on function private.is_admin(),private.protect_profile(),private.catalog_name(text),
+ private.lock_schedule(),private.validate_schedule(),private.validate_business(),private.validate_day(),
+ private.schedule_allows(date,time,time),private.slot_allowed(date,time,time,uuid),
+ private.assert_existing_schedule(),private.protect_existing_schedule(),private.validate_appointment(),
+ private.appointment_changed() from public,anon,authenticated;
 grant execute on function private.is_admin() to anon,authenticated;
 
 do $$ declare t text; begin
