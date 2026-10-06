@@ -24,10 +24,16 @@ async function mockBackend(page, { admin = false, failBooking = false, failServi
     await page.route('http://127.0.0.1:54321/**', async route => {
         const req = route.request(), url = new URL(req.url());
         const path = url.pathname, method = req.method();
-        if (method !== 'GET' && method !== 'OPTIONS') state.mutations.push({ path, method, body: req.postDataJSON() });
+        if (method !== 'GET' && method !== 'OPTIONS') {
+            const contentType = req.headers()['content-type'] || '';
+            const body = contentType.includes('application/json') ? req.postDataJSON() : req.postData();
+            state.mutations.push({ path, method, body });
+        }
         let response = {}, status = 200;
         const offset = Number(url.searchParams.get('offset') || 0);
-        if (path.endsWith('/token')) {
+        if (path.startsWith('/storage/v1/object/pixico-registration/pending/')) {
+            response = { Key: path.replace('/storage/v1/object/', '') };
+        } else if (path.endsWith('/token')) {
             response = { access_token: state.accessToken, refresh_token: 'local-test-refresh',
                 token_type: 'bearer', expires_in: 3600, user: authUser };
         } else if (path.endsWith('/signup')) response = { user: authUser };
@@ -186,7 +192,7 @@ test('metadata cannot redirect a client to admin; logout completes and session i
     await expect(page).toHaveURL(/\/$/); expect(state.signedOut).toBe(true);
     await page.goto('/painel'); await expect(page).toHaveURL(/\/login$/);
 });
-test('registration shows email confirmation without redirecting or embedding images in metadata',async ({page}) => {
+test('registration stores only persistent photo references in signup metadata',async ({page}) => {
     const state = await mockBackend(page); await page.goto('/cadastro');
     for (const [name,value] of Object.entries({nome:'Cliente',sobrenome:'Teste',whatsapp:'71999990000',email:'teste@example.invalid',senha:'LocalTest123!',confirmarSenha:'LocalTest123!'})) await page.locator('input[name='+name+']').fill(value);
     const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=','base64');
@@ -195,7 +201,10 @@ test('registration shows email confirmation without redirecting or embedding ima
     await page.getByRole('button',{name:'Criar Conta',exact:true}).click();
     await expect(page.getByRole('status')).toContainText('Verifique seu e-mail');
     await expect(page).toHaveURL(/\/cadastro$/);
-    expect(state.mutations.find(m=>m.path.endsWith('/signup')).body.data.fotoUrl).toBeUndefined();
+    const signup = state.mutations.find(m=>m.path.endsWith('/signup')).body;
+    expect(signup.data.fotoUrl).toMatch(/\/storage\/v1\/object\/public\/pixico-registration\/pending\/[0-9a-f-]+\.jpg$/);
+    expect(signup.data.fotoUrl.startsWith('data:')).toBe(false);
+    expect(signup.data.fotoPath).toMatch(/^pending\/[0-9a-f-]+\.jpg$/);
 });
 test('password recovery sends exact redirect and does not reveal account existence',async ({page}) => {
     const state = await mockBackend(page); await page.goto('/login');
@@ -350,7 +359,10 @@ test('registration requires a profile photo and carries it into first login', as
     await page.locator('input[name=senha]').fill('LocalTest123!');
     await page.getByRole('button',{name:'Entrar',exact:true}).click();
     await expect(page).toHaveURL(/\/painel$/);
-    expect(state.mutations.some(m=>m.path.endsWith('/profiles') && m.method==='PATCH' && typeof m.body.foto_url==='string' && m.body.foto_url.startsWith('data:image/jpeg;base64,'))).toBe(true);
+    const signup = state.mutations.find(m=>m.path.endsWith('/signup')).body;
+    expect(signup.data.fotoUrl).toMatch(/\/storage\/v1\/object\/public\/pixico-registration\/pending\/[0-9a-f-]+\.jpg$/);
+    expect(signup.data.fotoPath).toMatch(/^pending\/[0-9a-f-]+\.jpg$/);
+    expect(state.mutations.some(m=>m.path.endsWith('/profiles') && m.method==='PATCH')).toBe(false);
 });
 
 test('booking and admin catalog show the three practical service groups', async ({page}) => {

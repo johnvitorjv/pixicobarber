@@ -3,17 +3,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { AuthContext } from './auth';
 import { normalizeWhatsApp } from '../lib/contact';
 import { authMessage, profileToUser } from '../lib/authUtils';
-
-const pendingPhotoKey = (email = '') => `pixico:pending-photo:${email.trim().toLowerCase()}`;
-function getPendingPhoto(email) {
-    try { return window.localStorage.getItem(pendingPhotoKey(email)) || ''; } catch { return ''; }
-}
-function setPendingPhoto(email, photo) {
-    try { window.localStorage.setItem(pendingPhotoKey(email), photo); } catch { /* painel exigirá a foto novamente */ }
-}
-function clearPendingPhoto(email) {
-    try { window.localStorage.removeItem(pendingPhotoKey(email)); } catch { /* sem ação */ }
-}
+import { uploadRegistrationPhoto } from '../lib/registrationPhoto';
 
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
@@ -32,11 +22,6 @@ export function AuthProvider({ children }) {
         if (!authUser) { currentUserId.current = null; setUser(null); setLoading(false); return null; }
         if (currentUserId.current !== authUser.id) setLoading(true);
         try {
-            const pendingPhoto = getPendingPhoto(authUser.email);
-            if (pendingPhoto) {
-                const { error: photoError } = await supabase.from('profiles').update({ foto_url: pendingPhoto }).eq('id', authUser.id);
-                if (!photoError) clearPendingPhoto(authUser.email);
-            }
             const { data, error: queryError } = await supabase.from('profiles')
                 .select('id,nome,sobrenome,whatsapp,role,foto_url,nascimento,criado_em').eq('id', authUser.id).single();
             if (queryError) throw queryError;
@@ -95,18 +80,26 @@ export function AuthProvider({ children }) {
         if (!supabase) return { success: false, error: 'Cadastro indisponível no momento.' };
         if (!dados.fotoUrl) return { success: false, error: 'Adicione uma foto de perfil para continuar.' };
         const email = dados.email.trim().toLowerCase();
+        let photo;
+        try {
+            photo = await uploadRegistrationPhoto(supabase, dados.fotoUrl);
+        } catch (photoError) {
+            return { success: false, error: photoError.message || 'Não foi possível enviar sua foto.' };
+        }
+
         const { data, error: signupError } = await supabase.auth.signUp({
             email, password: dados.senha,
             options: { emailRedirectTo: window.location.origin + '/login', data: {
                 nome: dados.nome.trim(), sobrenome: dados.sobrenome.trim(),
                 whatsapp: normalizeWhatsApp(dados.whatsapp), nascimento: dados.nascimento || '',
                 observacoes: dados.observacoes?.trim() || '',
+                fotoUrl: photo.url,
+                fotoPath: photo.path,
             } },
         });
         if (signupError) return { success: false, error: authMessage(signupError) };
-        if (data.user) setPendingPhoto(email, dados.fotoUrl);
         if (!data.session) return { success: true, needsConfirmation: true,
-            message: 'Verifique seu e-mail para confirmar a conta. Sua foto será vinculada no primeiro login neste aparelho.' };
+            message: 'Verifique seu e-mail para confirmar a conta. Sua foto já foi vinculada ao cadastro.' };
         const safeUser = await loadUser(data.user);
         return safeUser ? { success: true, user: safeUser } : { success: false, error: 'Conta criada. Faça login novamente para carregar o perfil.' };
     }
