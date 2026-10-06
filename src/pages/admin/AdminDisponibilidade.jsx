@@ -1,3 +1,4 @@
+import DayOverrideEditor from '../../components/DayOverrideEditor';
 import { useState } from 'react';
 import { useAction } from '../../hooks/useAction';
 import DataState from '../../components/DataState';
@@ -132,6 +133,7 @@ export default function AdminDisponibilidade() {
                                         }`}>
                                     {dayInfo?.disponivel ? <><Lock size={14} /> Fechar Dia</> : <><Unlock size={14} /> Abrir Dia</>}
                                 </button>
+                                <DayOverrideEditor key={diaSel + JSON.stringify(availabilityStore.getOverride(diaSel))} date={diaSel} config={config} action={action} />
                                 {dayInfo?.disponivel && dayInfo?.faixas?.length > 0 && (
                                     <div>
                                         <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-4">
@@ -187,8 +189,7 @@ export default function AdminDisponibilidade() {
 
                             <h3 className="font-display font-bold text-lg uppercase tracking-widest border-b border-white/10 pb-4 mb-6">Regras de Agendamento</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                                <InputField label="Intervalo entre inícios (min)" value={config.duracaoSlot} onChange={v => setConfig(previous => { const c = previous || config; return ({ ...c, duracaoSlot: Number(v) }); })} type="number" />
-                                <InputField label="Limite Clientes/Dia" value={config.limiteClientesDia} onChange={v => setConfig(previous => { const c = previous || config; return ({ ...c, limiteClientesDia: Number(v) }); })} type="number" />
+                                <p className="text-sm text-zinc-400">Inícios a cada 15 minutos. Sem limite artificial de clientes por dia ou turno.</p>
                             </div>
 
                             <button disabled={action.busy} onClick={salvarConfig} className="w-full bg-primary text-black py-4 font-display font-bold uppercase text-xs tracking-[0.3em] flex items-center justify-center gap-3 hover:bg-white transition-colors">
@@ -198,8 +199,8 @@ export default function AdminDisponibilidade() {
 
                         {/* Bloqueios Especiais */}
                         <section className="pt-8 border-t border-white/5">
-                            <h3 className="font-display font-bold text-lg uppercase tracking-widest mb-6">Bloqueios Furtivos</h3>
-                            <p className="text-zinc-500 font-modern text-[11px] uppercase tracking-widest mb-6 leading-relaxed">Dias que devem ser removidos da disponibilidade pública sem impactar o expediente fixo. Ex: Feriados Nacionais, Manutenção.</p>
+                            <h3 className="font-display font-bold text-lg uppercase tracking-widest mb-6">Fechamentos globais</h3>
+                            <p className="text-zinc-500 font-modern text-[11px] uppercase tracking-widest mb-6 leading-relaxed">Fechamentos manuais. Exceções individuais de data têm prioridade sobre estes bloqueios.</p>
 
                             {config.bloqueiosEspeciais?.length > 0 && (
                                 <div className="space-y-2 mb-6">

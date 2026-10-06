@@ -4,6 +4,7 @@
 
 // ─── Status de Agendamento ───
 export const STATUS = {
+    SOLICITADO: 'solicitado',
     PENDENTE: 'pendente',
     APROVADO: 'confirmado',
     REJEITADO: 'rejeitado',
@@ -16,6 +17,7 @@ export const STATUS = {
 };
 
 export const STATUS_CONFIG = {
+    [STATUS.SOLICITADO]: { label: 'Solicitação química · sem reserva', cor: 'text-yellow-400', bg: 'bg-yellow-400/10', icon: 'Clock' },
     [STATUS.PENDENTE]: { label: 'Pendente', cor: 'text-yellow-400', bg: 'bg-yellow-400/10', icon: 'Clock' },
     [STATUS.APROVADO]: { label: 'Aprovado', cor: 'text-green-400', bg: 'bg-green-400/10', icon: 'CheckCircle' },
     [STATUS.REJEITADO]: { label: 'Rejeitado', cor: 'text-red-400', bg: 'bg-red-400/10', icon: 'XCircle' },
@@ -31,7 +33,6 @@ export const STATUS_CONFIG = {
 export const MOTIVOS_REJEICAO = [
     { id: 'dia_indisponivel', label: 'Dia já indisponível' },
     { id: 'horario_ocupado', label: 'Horário já ocupado' },
-    { id: 'limite_turno', label: 'Limite de atendimentos do turno atingido' },
     { id: 'barbearia_fechada', label: 'Barbearia fechada na data' },
     { id: 'conflito_agenda', label: 'Conflito de agenda' },
     { id: 'servico_indisponivel', label: 'Serviço indisponível no horário' },
@@ -66,8 +67,8 @@ export const NOTIF_NIVEIS = {
 
 // ─── Turnos ───
 export const TURNOS = {
-    MANHA: { id: 'manha', label: 'Manhã', inicio: '09:00', fim: '12:00' },
-    TARDE: { id: 'tarde', label: 'Tarde', inicio: '14:00', fim: '18:00' },
+    MANHA: { id: 'manha', label: 'Manhã', inicio: '09:00', fim: '13:00' },
+    TARDE: { id: 'tarde', label: 'Tarde', inicio: '15:30', fim: '20:00' },
 };
 
 // ─── Formas de Pagamento ───

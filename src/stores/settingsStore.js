@@ -1,7 +1,7 @@
 import { normalizeWhatsApp } from '../lib/contact';
 import { requireSupabase } from '../lib/supabase';
 import { createRemoteStore } from './remoteStore';
-const defaults = { nomeNegocio: 'PIXICO Barber', whatsappNumero: '5571994096863', endereco: 'R. Ten. Aragão, 121 — Itacaranha, Salvador — BA', blacklistBehavior: 'approval' };
+const defaults = { nomeNegocio: 'PIXICO Barber', whatsappNumero: '5571994096863', endereco: 'R. da Palestina, 297c - Itacaranha, Salvador - BA, 40713-660', blacklistBehavior: 'approval' };
 const remote = createRemoteStore('business_settings');
 const settingsStore = {
     ...remote,

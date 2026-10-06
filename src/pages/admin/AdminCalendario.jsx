@@ -27,7 +27,7 @@ export default function AdminCalendario() {
     const config = availabilityStore.getConfig();
     if (!config) return <DataState loading />;
     const disponibilidade = availabilityStore.getRange(60);
-    const todosAgendamentos = sbApps;
+    const todosAgendamentos = sbApps.filter(a => a.status !== 'solicitado');
 
     // ─── Navegação ───
     function navAnterior() {
@@ -68,7 +68,9 @@ export default function AdminCalendario() {
     // ─── Gerar slots de horário ───
     function getSlots() {
         const slots = [];
-        for (let minute = timeToMinutes(config.horarioInicio); minute < timeToMinutes(config.horarioFim); minute += config.duracaoSlot) {
+        const times = diasVisiveis.flatMap(d => (availabilityStore.getDay(toDateKey(d)).intervalos || []).flatMap(f => [timeToMinutes(f.inicio), timeToMinutes(f.fim)]));
+        const starts = todosAgendamentos.filter(a => diasVisiveis.some(d=>toDateKey(d)===a.data)).flatMap(a=>[timeToMinutes(a.faixaInicio),timeToMinutes(a.faixaFim)]);
+        for (let minute = Math.floor(Math.min(timeToMinutes(config.horarioInicio),...times,...starts)/15)*15; minute < Math.max(timeToMinutes(config.horarioFim),...times,...starts); minute += 15) {
             slots.push(pad(Math.floor(minute / 60)) + ':' + pad(minute % 60));
         }
         return slots;
@@ -194,7 +196,7 @@ export default function AdminCalendario() {
                     {diasVisiveis.map(dia => {
                         const dk = toDateKey(dia);
                         const isHoje = dk === hojeKey;
-                        const disp = disponibilidade[dk];
+                        const disp = disponibilidade[dk] || availabilityStore.getDay(dk);
                         const bloqueado = disp?.disponivel === false;
                         const numAg = getAgendamentosDia(dk).length;
 
@@ -226,13 +228,13 @@ export default function AdminCalendario() {
                             {/* Células por dia */}
                             {diasVisiveis.map(dia => {
                                 const dk = toDateKey(dia);
-                                const almoco = isAlmoco(slot);
-                                const disp = disponibilidade[dk];
-                                const bloqueado = disp?.disponivel === false;
+                                const almoco = !availabilityStore.getOverride(dk) && isAlmoco(slot);
+                                const disp = disponibilidade[dk] || availabilityStore.getDay(dk);
+                                const bloqueado = disp?.disponivel === false || !disp?.faixas?.find(f=>f.inicio===slot)?.disponivel;
                                 const ag = getAgendamentoSlot(dk, slot);
                                 const isHoje = dk === hojeKey;
 
-                                if (bloqueado) {
+                                if (bloqueado && !ag && !almoco) {
                                     return (
                                         <div key={`${dk}-${slot}`} className="border-b border-l border-white/5 p-1 bg-red-500/5">
                                             <div className="h-full flex items-center justify-center">

@@ -7,7 +7,7 @@ function formatPreco(v) { return `R$ ${Number(v || 0).toFixed(0)}`; }
 import availabilityStore from '../stores/availabilityStore';
 import { createAppointmentSupabase, useSupabaseServices } from '../hooks/useSupabase';
 import { useSlots } from '../hooks/useSlots';
-import { bahiaDate, calendarDate, mutationMessage } from '../lib/bookingRules';
+import { bahiaDate, calendarDate, mutationMessage, serviceAllowedOnDate, serviceDurationLabel } from '../lib/bookingRules';
 import DataState from '../components/DataState';
 import { useStoreSync } from '../hooks/useStore';
 import { ArrowLeft, Lock, Check, ChevronLeft, ChevronRight, MessageCircle, ArrowUpRight } from 'lucide-react';
@@ -79,8 +79,8 @@ export default function BookingPage() {
                 dia: d,
                 data: chave,
                 passado,
-                disponivel: !passado && info?.disponivel === true,
-                fechado: info?.disponivel === false,
+                disponivel: !passado && info?.disponivel === true && serviceAllowedOnDate(servicoSelecionado,chave),
+                fechado: !info?.disponivel || !serviceAllowedOnDate(servicoSelecionado,chave),
                 motivo: info?.motivo || '',
             });
         }
@@ -96,7 +96,7 @@ export default function BookingPage() {
         try {
             await createAppointmentSupabase({
                 clienteId: user.id, servicoId, data: dataSelecionada,
-                faixaInicio: selected.inicio, faixaFim: selected.fim, observacaoCliente: observacao,
+                confirmacaoManual: servicoSelecionado.confirmacaoManual, faixaInicio: selected.inicio, faixaFim: selected.fim, observacaoCliente: observacao,
             });
             setStep(5);
         } catch (err) { setError(mutationMessage(err)); await refetchSlots(); }
@@ -109,7 +109,7 @@ export default function BookingPage() {
     }
 
     const whatsappLink = gerarLinkWhatsApp(
-        `Olá! Acabei de agendar ${servicoSelecionado?.nome || 'um serviço'} para ${dataSelecionada ? formatDataExibicao(dataSelecionada) : ''}. Meu nome é ${user?.nome}.`
+        `Olá! Enviei uma solicitação de ${servicoSelecionado?.nome || 'um serviço'} para ${dataSelecionada ? formatDataExibicao(dataSelecionada) : ''}. Meu nome é ${user?.nome}.`
     );
 
     return (
@@ -127,6 +127,7 @@ export default function BookingPage() {
             <div className="max-w-4xl mx-auto px-6 py-12 md:py-20">
                 <DataState loading={sbServicesLoading} error={servicesError} retry={refetchServices} />
                 <DataState error={error} />
+                {servicoSelecionado?.confirmacaoManual && <p role="note" className="border border-yellow-500/30 p-4 mb-6 text-sm text-yellow-300">Serviço químico com duração variável. Aplicação de aproximadamente 15 minutos, seguida de processamento e lavagem. Este pedido não reserva uma vaga. O profissional definirá a ocupação total e confirmará o horário.</p>}
                 {/* Progress */}
                 <div className="flex flex-wrap items-center gap-2 md:gap-4 mb-16 border-b border-white/5 pb-12">
                     {['Serviço', 'Data', 'Horário', 'Confirmar'].map((label, i) => (
@@ -173,7 +174,7 @@ export default function BookingPage() {
                                             Duração
                                         </span>
                                         <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">
-                                            {s.duracao} min
+                                            {serviceDurationLabel(s)}{s.diasPermitidos?.length < 7 && <span className="block mt-2">{s.diasPermitidos.map(d=>DIAS_SEMANA[d]).join(', ')}</span>}
                                         </span>
                                     </div>
                                 </button>
@@ -295,7 +296,7 @@ export default function BookingPage() {
                                             : 'bg-black border-white/10 text-white hover:border-primary hover:-translate-y-1'
                                         }`}
                                 >
-                                    {faixa.inicio} <span className="opacity-30 mx-1">—</span> {faixa.fim}
+                                    {faixa.inicio} <span className="opacity-30 mx-1">—</span> {faixa.fim || 'a definir'}
                                     {!faixa.disponivel && <span className="block text-[9px] font-modern uppercase tracking-widest text-red-500/50 mt-3">Indisponível</span>}
                                 </button>
                             ))}
@@ -334,7 +335,7 @@ export default function BookingPage() {
                                     <span className="font-display font-bold uppercase tracking-widest text-lg text-white">
                                         {slots?.find(f => f.id === faixaSelecionada)?.inicio}
                                         <span className="opacity-50 mx-2">—</span>
-                                        {slots?.find(f => f.id === faixaSelecionada)?.fim}
+                                        {slots?.find(f => f.id === faixaSelecionada)?.fim || 'a definir'}
                                     </span>
                                 </div>
                             </div>

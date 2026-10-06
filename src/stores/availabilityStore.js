@@ -1,6 +1,6 @@
 import { requireSupabase } from '../lib/supabase';
 import { createRemoteStore } from './remoteStore';
-import { bahiaDate, calendarDate, generateDay, validateSchedule } from '../lib/bookingRules';
+import { bahiaDate, calendarDate, generateDay, validateSchedule, validateOverride, defaultOpenDay } from '../lib/bookingRules';
 const rules = createRemoteStore('schedule_config');
 const overrides = createRemoteStore('day_overrides');
 const availabilityStore = {
@@ -15,23 +15,30 @@ const availabilityStore = {
         return config;
     },
     getDay(dateStr) { return generateDay(dateStr, this.getConfig(), overrides.getAll().find(d => d.data === dateStr)?.value); },
-    async setDay(dateStr, data) { await overrides.write(requireSupabase().from('day_overrides').upsert({ data: dateStr, value: data }).select().single()); return data; },
+    getOverride(dateStr) { return overrides.getAll().find(d => d.data === dateStr)?.value || null; },
+    async setDay(dateStr, data) { validateOverride(data); const { faixas: _grid, ...value } = data; await overrides.write(requireSupabase().from('day_overrides').upsert({ data: dateStr, value }).select().single()); return value; },
     async blockSlot(dateStr, slotId) {
         const day = this.getDay(dateStr);
         if (!day.disponivel) return day;
-        return this.setDay(dateStr, { ...day, faixas: day.faixas.map(f => f.id === slotId ? { ...f, disponivel: false } : f) });
+        const slot = day.faixas.find(f => f.id === slotId);
+        return this.setDay(dateStr, { ...day, bloqueios: [...day.bloqueios, { inicio: slot.inicio, fim: slot.fim }] });
     },
     async unblockSlot(dateStr, slotId) {
         const day = this.getDay(dateStr);
-        return this.setDay(dateStr, { ...day, faixas: day.faixas.map(f => f.id === slotId ? { ...f, disponivel: true } : f) });
+        const slot = day.faixas.find(f => f.id === slotId);
+        return this.setDay(dateStr, { ...day, bloqueios: day.bloqueios.flatMap(f => {
+            if (f.inicio >= slot.fim || f.fim <= slot.inicio) return [f];
+            return [f.inicio < slot.inicio && { inicio: f.inicio, fim: slot.inicio }, f.fim > slot.fim && { inicio: slot.fim, fim: f.fim }].filter(Boolean);
+        }) });
     },
-    async closeDay(dateStr, motivo) { return this.setDay(dateStr, { disponivel: false, motivo: motivo || 'Fechado', faixas: [] }); },
+    async closeDay(dateStr, motivo) { return this.setDay(dateStr, { disponivel: false, motivo: motivo || 'Fechado', intervalos: [], bloqueios: [] }); },
     async openDay(dateStr) {
-        // Explicitly open closed weekdays using the current valid schedule.
-        const config = this.getConfig();
-        const dow = new Date(dateStr + 'T12:00:00').getDay();
-        const day = generateDay(dateStr, { ...config, diasFuncionamento: [...new Set([...config.diasFuncionamento, dow])] });
-        return this.setDay(dateStr, day);
+        return this.setDay(dateStr, defaultOpenDay(this.getConfig()));
+    },
+    async resetDay(dateStr) {
+        const { error } = await requireSupabase().from('day_overrides').delete().eq('data', dateStr);
+        if (error) throw error;
+        await overrides.load();
     },
     getRange(days = 60) {
         const result = {};

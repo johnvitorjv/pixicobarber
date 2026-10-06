@@ -43,6 +43,7 @@ function useRows(table, select = '*', order = 'criado_em', publicRead = false) {
 }
 export function mapAppointment(a) {
     return {
+        confirmacaoManual: a.confirmacao_manual === true,
         id: a.id, clienteId: a.cliente_id, servicoId: a.servico_id,
         servicoNome: a.servico_nome_reservado || a.services?.nome || 'Serviço',
         servicoPreco: Number(a.preco_reservado ?? a.services?.preco ?? 0),
@@ -60,13 +61,13 @@ export function mapAppointment(a) {
 }
 export function useSupabaseAppointments() {
     const { isAdmin } = useAuth();
-    const state = useRows('appointments', 'id,cliente_id,servico_id,data,faixa_inicio,faixa_fim,status,notas_cliente,recurso_id,criado_em,atualizado_em,preco_reservado,servico_nome_reservado,valor_cobrado,forma_pagamento,motivo_rejeicao,sugestao_data,sugestao_inicio,sugestao_fim,profiles:cliente_id(id,nome,sobrenome,whatsapp,foto_url),services:servico_id(id,nome,preco,duracao,categoria)' + (isAdmin ? ',notas_admin' : ''));
+    const state = useRows('appointments', 'id,cliente_id,servico_id,data,faixa_inicio,faixa_fim,status,confirmacao_manual,notas_cliente,recurso_id,criado_em,atualizado_em,preco_reservado,servico_nome_reservado,valor_cobrado,forma_pagamento,motivo_rejeicao,sugestao_data,sugestao_inicio,sugestao_fim,profiles:cliente_id(id,nome,sobrenome,whatsapp,foto_url),services:servico_id(id,nome,preco,duracao,categoria)' + (isAdmin ? ',notas_admin' : ''));
     return { ...state, appointments: state.rows.map(mapAppointment) };
 }
-export async function createAppointmentSupabase({ clienteId, servicoId, data, faixaInicio, faixaFim, observacaoCliente }) {
+export async function createAppointmentSupabase({ clienteId, servicoId, data, faixaInicio, faixaFim, observacaoCliente, confirmacaoManual = false }) {
     const { data: result, error } = await requireSupabase().from('appointments').insert({
         cliente_id: clienteId, servico_id: servicoId, data, faixa_inicio: faixaInicio, faixa_fim: faixaFim,
-        status: 'pendente', notas_cliente: observacaoCliente || '',
+        status: confirmacaoManual ? 'solicitado' : 'pendente', notas_cliente: observacaoCliente || '',
     }).select('id').single();
     if (error) throw error;
     return result;
@@ -102,7 +103,7 @@ export async function updateProfileSupabase(id, updates) {
 function mapService(s) {
     return { id: s.id, nome: s.nome, descricaoCurta: s.descricao_curta || '', descricaoDetalhada: s.descricao_detalhada || '',
         preco: Number(s.preco), precoPromocional: s.preco_promocional == null ? null : Number(s.preco_promocional),
-        duracao: s.duracao, categoria: s.categoria, status: s.status, ordem: s.ordem || 0, imagemUrl: s.imagem_url || '',
+        duracao: s.duracao, aplicacaoMinutos: s.aplicacao_minutos, confirmacaoManual: s.confirmacao_manual === true, diasPermitidos: s.dias_permitidos || [0,1,2,3,4,5,6], categoria: s.categoria, status: s.status, ordem: s.ordem || 0, imagemUrl: s.imagem_url || '',
         destaque: s.destaque, badge: s.badge || '', visivelHome: s.visivel_home, visivelCliente: s.visivel_cliente, visivelAgendamento: s.visivel_agendamento };
 }
 export function useSupabaseServices() {
@@ -117,7 +118,7 @@ export function useSupabaseServices() {
 }
 function mapServiceToDb(data) {
     const names = { nome: 'nome', descricaoCurta: 'descricao_curta', descricaoDetalhada: 'descricao_detalhada',
-        preco: 'preco', precoPromocional: 'preco_promocional', duracao: 'duracao', categoria: 'categoria',
+        confirmacaoManual: 'confirmacao_manual', diasPermitidos: 'dias_permitidos', aplicacaoMinutos: 'aplicacao_minutos', preco: 'preco', precoPromocional: 'preco_promocional', duracao: 'duracao', categoria: 'categoria',
         status: 'status', ordem: 'ordem', imagemUrl: 'imagem_url', destaque: 'destaque', badge: 'badge',
         visivelHome: 'visivel_home', visivelCliente: 'visivel_cliente', visivelAgendamento: 'visivel_agendamento' };
     return Object.fromEntries(Object.entries(data).filter(([k]) => names[k]).map(([k,v]) => [names[k],v]));

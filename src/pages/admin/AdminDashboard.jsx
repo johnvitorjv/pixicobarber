@@ -22,7 +22,7 @@ export default function AdminDashboard() {
     const allApps = sbApps;
     const agStats = {
         total: allApps.length,
-        pendentes: allApps.filter(a => a.status === 'pendente').length,
+        pendentes: allApps.filter(a => ['solicitado','pendente'].includes(a.status)).length,
         aprovados: allApps.filter(a => a.status === 'confirmado').length,
         rejeitados: allApps.filter(a => a.status === 'rejeitado').length,
         aguardando: allApps.filter(a => a.status === 'aguardando_cliente').length,
@@ -37,7 +37,7 @@ export default function AdminDashboard() {
     const hojeApps = allApps
         .filter(a => a.data === hoje && ['confirmado','pendente','remarcado','aguardando_cliente'].includes(a.status))
         .sort((a, b) => (a.faixaInicio || '').localeCompare(b.faixaInicio || ''));
-    const pendentes = allApps.filter(a => a.status === 'pendente');
+    const pendentes = allApps.filter(a => ['solicitado','pendente'].includes(a.status));
     const aguardando = allApps.filter(a => a.status === 'aguardando_cliente');
 
     const STAT_CARDS = [

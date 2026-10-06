@@ -4,8 +4,11 @@ const id = '11111111-1111-4111-8111-111111111111';
 const serviceId = '44444444-4444-4444-8444-444444444444';
 const tomorrow = new Date(bahiaDate() + 'T12:00:00'); tomorrow.setDate(tomorrow.getDate() + 1);
 const day = bahiaDate(tomorrow);
+test.beforeEach(async ({page}) => {
+    await page.route('**/*', route => ['127.0.0.1','localhost'].includes(new URL(route.request().url()).hostname) ? route.continue() : route.abort());
+});
 
-async function mockBackend(page, { admin = false, failBooking = false, failService = false, failLogout = false, flagged = false } = {}) {
+async function mockBackend(page, { admin = false, failBooking = false, failService = false, failLogout = false, flagged = false, chemical = false, failOverride = false } = {}) {
     const state = { mutations: [], apps: [], signedOut: false, failLogout, config: {nomeNegocio:'PIXICO Barber',whatsappNumero:'5571994096863',endereco:'Salvador',blacklistBehavior:'approval'} };
     const payload = Buffer.from(JSON.stringify({sub:id,exp:Math.floor(Date.now()/1000)+3600,role:'authenticated'})).toString('base64url');
     state.accessToken = 'eyJhbGciOiJIUzI1NiJ9.'+payload+'.test-signature';
@@ -14,7 +17,10 @@ async function mockBackend(page, { admin = false, failBooking = false, failServi
     const profile = { id, nome: 'Cliente', sobrenome: 'Teste', role: admin ? 'admin' : 'client', whatsapp: '5571999990000', foto_url: '', criado_em: '2026-01-01T12:00:00Z' };
     const service = { id: serviceId, nome: 'Corte', descricao_curta: 'Corte de teste', preco: 60, duracao: 45,
         categoria: 'corte', status: 'ativo', ordem: 1, visivel_home: true, visivel_cliente: true, visivel_agendamento: true };
+    if (chemical) Object.assign(service,{nome:'Platinado',descricao_curta:'Químico de teste',preco:100,duracao:null,confirmacao_manual:true,aplicacao_minutos:15});
     if (flagged) state.apps.push({id:'55555555-5555-4555-8555-555555555555',cliente_id:id,servico_id:serviceId,data:day,faixa_inicio:'09:00',faixa_fim:'09:45',status:'pendente',servico_nome_reservado:'Corte',preco_reservado:60,profiles:profile,services:service});
+    if (flagged && chemical) Object.assign(state.apps[0],{servico_nome_reservado:'Platinado',status:'solicitado',faixa_fim:null,confirmacao_manual:true});
+    state.overrides=[];
     await page.route('http://127.0.0.1:54321/**', async route => {
         const req = route.request(), url = new URL(req.url());
         const path = url.pathname, method = req.method();
@@ -31,9 +37,15 @@ async function mockBackend(page, { admin = false, failBooking = false, failServi
         else if (path.endsWith('/profiles')) response = method === 'GET' ? profile : { id };
         else if (path.endsWith('/get_admin_clients')) response = [{ ...profile, role:'client', favorito:flagged, tags:[], blacklist:flagged }];
         else if (path.endsWith('/services')) { if (method !== 'GET' && failService) { status=503; response={message:'upstream unavailable'}; } else response=[service]; }
-        else if (path.endsWith('/schedule_config')) response = [{ id:true, data:{ diasFuncionamento:[0,1,2,3,4,5,6], horarioInicio:'09:00',horarioFim:'18:00',intervaloAlmoco:{inicio:'12:00',fim:'14:00'},duracaoSlot:30,limiteClientesDia:16,limiteClientesTurno:8,bloqueiosEspeciais:[],ferias:[] } }];
+        else if (path.endsWith('/schedule_config')) response = [{ id:true, data:{ diasFuncionamento:[0,1,2,3,4,5,6], horarioInicio:'09:00',horarioFim:'20:00',intervaloAlmoco:{inicio:'13:00',fim:'15:30'},duracaoSlot:15,bloqueiosEspeciais:[],ferias:[] } }];
         else if (path.endsWith('/business_settings')) { if (method === 'PATCH') state.config = req.postDataJSON().data; response = [{id:true,data:state.config}]; }
-        else if (path.endsWith('/get_available_slots')) response = [{id:'09:00',inicio:'09:00',fim:'09:45',disponivel:true}];
+        else if (path.endsWith('/day_overrides')) {
+            if (method==='POST' && failOverride) {status=400;response={code:'P0001',message:'Regra invalida agendamento existente. Remarque ou cancele antes de alterar.'};}
+            else if(method==='POST') {const row=req.postDataJSON();state.overrides=[row];response=row;}
+            else if(method==='DELETE') {state.overrides=[];response=[];}
+            else response=state.overrides;
+        }
+        else if (path.endsWith('/get_available_slots')) response = [{id:'09:00',inicio:'09:00',fim:chemical?null:'09:45',disponivel:true}];
         else if (path.endsWith('/get_admin_appointments')) response = state.apps;
         else if (path.endsWith('/appointments')) {
             if (method === 'POST') {
@@ -60,6 +72,56 @@ async function chooseBooking(page) {
     await page.getByRole('button',{name:String(tomorrow.getDate()),exact:true}).click();
     await page.getByRole('button',{name:'09:00 — 09:45',exact:true}).click();
 }
+
+test('chemical customer request clearly has variable duration, null end and no reservation guarantee',async({page})=>{
+    const state=await mockBackend(page,{chemical:true}); await login(page); await expect(page).toHaveURL(/\/painel$/);
+    await page.goto('/agendar');
+    await expect(page.getByRole('button',{name:/Platinado/})).toContainText('Duração variável');
+    await page.getByRole('button',{name:/Platinado/}).click();
+    await expect(page.getByRole('note')).toContainText('Este pedido não reserva uma vaga');
+    if (tomorrow.getDate()===1) await page.getByRole('button').filter({has:page.locator('svg.lucide-chevron-right')}).click();
+    await page.getByRole('button',{name:String(tomorrow.getDate()),exact:true}).click();
+    await page.getByRole('button',{name:'09:00 — a definir',exact:true}).click();
+    await page.getByRole('button',{name:'Confirmar Solicitação'}).click();
+    await expect(page.getByRole('heading',{name:/Solicitação.*Enviada/})).toBeVisible();
+    const body=state.mutations.find(m=>m.path.endsWith('/appointments')).body;
+    expect(body.status).toBe('solicitado');expect(body.faixa_fim).toBeNull();
+});
+
+test('admin defines full chemical occupation before confirmation',async({page})=>{
+    const state=await mockBackend(page,{admin:true,flagged:true,chemical:true}); await login(page);await expect(page).toHaveURL(/\/admin$/);
+    await page.goto('/admin/agendamentos');
+    await expect(page.locator('td').getByText('Solicitação química · sem reserva',{exact:true})).toBeVisible();
+    await page.getByRole('button',{name:'Aprovar',exact:true}).click();
+    await expect(page.getByText(/incluindo processamento e lavagem/)).toBeVisible();
+    await page.getByLabel('Fim ocupado').fill('12:00');
+    await page.setViewportSize({width:390,height:844});
+    await page.screenshot({path:'test-results/chemical-confirmation-mobile.png',fullPage:true});
+    await page.getByRole('button',{name:'Confirmar Aprovação'}).click();
+    await expect(page.getByRole('heading',{name:'Aprovar Agendamento'})).toHaveCount(0);
+    const body=state.mutations.find(m=>m.path.endsWith('/appointments')&&m.method==='PATCH').body;
+    expect(body).toMatchObject({status:'confirmado',data:day,faixa_inicio:'09:00',faixa_fim:'12:00'});
+});
+
+test('admin saves multiple work intervals and arbitrary blocks; failed rules preserve editor',async({page})=>{
+    const state=await mockBackend(page,{admin:true,failOverride:true});await login(page);await expect(page).toHaveURL(/\/admin$/);
+    await page.goto('/admin/disponibilidade');
+    if(tomorrow.getDate()===1) await page.getByRole('button').filter({has:page.locator('svg.lucide-chevron-right')}).click();
+    await page.getByRole('button',{name:String(tomorrow.getDate()),exact:true}).click();
+    await page.getByLabel('Trabalho 1 inicio').fill('08:00');
+    await page.getByRole('button',{name:'+ Bloqueio',exact:true}).click();
+    await page.getByLabel('Bloqueio 1 inicio').fill('10:07');await page.getByLabel('Bloqueio 1 fim').fill('10:22');
+    await page.getByRole('button',{name:'+ Bloqueio',exact:true}).click();
+    await page.getByLabel('Bloqueio 2 inicio').fill('16:03');await page.getByLabel('Bloqueio 2 fim').fill('16:18');
+    await page.getByRole('button',{name:'Salvar exceção',exact:true}).click();
+    await expect(page.getByRole('alert')).toContainText('Remarque ou cancele');
+    await expect(page.getByLabel('Trabalho 1 inicio')).toHaveValue('08:00');
+    await page.setViewportSize({width:390,height:844});
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    await page.screenshot({path:'test-results/date-override-mobile.png',fullPage:true});
+    const body=state.mutations.find(m=>m.path.endsWith('/day_overrides')).body;
+    expect(body.value.intervalos).toHaveLength(2);expect(body.value.bloqueios).toEqual([{inicio:'10:07',fim:'10:22'},{inicio:'16:03',fim:'16:18'}]);
+});
 test('metadata cannot redirect a client to admin; logout completes and session is removed',async ({page}) => {
     const state = await mockBackend(page); await login(page);
     await expect(page).toHaveURL(/\/painel$/); await expect(page.getByRole('heading',{name:'Olá, Cliente'})).toBeVisible();

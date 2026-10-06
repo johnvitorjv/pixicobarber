@@ -70,13 +70,14 @@ export default function AdminAgendamentos() {
     function abrirAprovar(ag) {
         const cliente = getCliente(ag);
         const msg = TEMPLATES.aprovacao({ nome: cliente?.nome || 'Cliente', data: ag.data, faixaInicio: ag.faixaInicio, faixaFim: ag.faixaFim });
-        setMensagemWpp(msg);
+        setMensagemWpp(ag.status === 'solicitado' ? 'Vamos avaliar a duração total e confirmar seu atendimento químico.' : msg);
+        setNovaData(ag.data); setNovaFaixaInicio(ag.faixaInicio); setNovaFaixaFim(ag.faixaFim || '');
         setModal({ tipo: 'aprovar', ag });
     }
 
     async function confirmarAprovar() {
         await action.execute(async () => {
-            await updateAppointmentSupabase(modal.ag.id, { status: 'confirmado' }); await refetchAppointments(); setModal(null);
+            await updateAppointmentSupabase(modal.ag.id, { status: 'confirmado', ...(modal.ag.confirmacaoManual ? { data: novaData, faixaInicio: novaFaixaInicio, faixaFim: novaFaixaFim } : {}) }); await refetchAppointments(); setModal(null);
         });
     }
 
@@ -88,7 +89,7 @@ export default function AdminAgendamentos() {
         setNovaData('');
         setNovaFaixaInicio('');
         setNovaFaixaFim('');
-        const msg = TEMPLATES.rejeicao({ nome: cliente?.nome || 'Cliente', data: ag.data, faixa: `${ag.faixaInicio} às ${ag.faixaFim}`, motivo: '...' });
+        const msg = TEMPLATES.rejeicao({ nome: cliente?.nome || 'Cliente', data: ag.data, faixa: `${ag.faixaInicio} às ${ag.faixaFim || 'a definir'}`, motivo: '...' });
         setMensagemWpp(msg);
         setModal({ tipo: 'rejeitar', ag });
     }
@@ -229,8 +230,8 @@ export default function AdminAgendamentos() {
                                         </td>
                                         <td className="py-4 px-6">
                                             <div className="flex items-center gap-2 flex-wrap opacity-100 transition-opacity duration-300">
-                                                {['pendente','confirmado','remarcado','aguardando_cliente'].includes(ag.status) && <button disabled={action.busy} title="Cancelar agendamento" onClick={() => cancelarAdmin(ag)} className="text-red-400 p-2"><Ban size={14} /></button>}
-                                                {ag.status === STATUS.PENDENTE && (
+                                                {['solicitado','pendente','confirmado','remarcado','aguardando_cliente'].includes(ag.status) && <button disabled={action.busy} title="Cancelar agendamento" onClick={() => cancelarAdmin(ag)} className="text-red-400 p-2"><Ban size={14} /></button>}
+                                                {[STATUS.PENDENTE, STATUS.SOLICITADO].includes(ag.status) && (
                                                     <>
                                                         <button onClick={() => abrirAprovar(ag)} className="px-2 py-1 bg-green-500/10 text-green-400 text-[10px] font-bold uppercase tracking-wider hover:bg-green-500/20 transition-colors">Aprovar</button>
                                                         <button onClick={() => abrirRejeitar(ag)} className="px-2 py-1 bg-red-500/10 text-red-400 text-[10px] font-bold uppercase tracking-wider hover:bg-red-500/20 transition-colors">Rejeitar</button>
@@ -274,8 +275,14 @@ export default function AdminAgendamentos() {
                     <div className="space-y-4 mb-8 bg-white/[0.02] border border-white/5 p-6">
                         <InfoRow label="Serviço" value={modal.ag.servicoNome} />
                         <InfoRow label="Data" value={formatData(modal.ag.data)} />
-                        <InfoRow label="Horário" value={`${modal.ag.faixaInicio} — ${modal.ag.faixaFim}`} />
+                        <InfoRow label="Horário" value={`${modal.ag.faixaInicio} — ${modal.ag.faixaFim || 'a definir'}`} />
                     </div>
+                    <div>{modal.ag.confirmacaoManual && <div className="space-y-3 mb-6 border border-yellow-500/30 p-4">
+                        <p className="text-sm text-yellow-300">Defina a ocupação total, incluindo processamento e lavagem (30 a 480 min). A confirmação exige todo o intervalo livre.</p>
+                        <label className="block">Data do atendimento<input aria-label="Data do atendimento" type="date" className="w-full bg-black border border-white/20 p-2" value={novaData} onChange={e=>setNovaData(e.target.value)} /></label>
+                        <label className="block">Início ocupado<input aria-label="Início ocupado" type="time" step="900" className="w-full bg-black border border-white/20 p-2" value={novaFaixaInicio} onChange={e=>setNovaFaixaInicio(e.target.value)} /></label>
+                        <label className="block">Fim ocupado<input aria-label="Fim ocupado" type="time" className="w-full bg-black border border-white/20 p-2" value={novaFaixaFim} onChange={e=>setNovaFaixaFim(e.target.value)} /></label>
+                    </div>}</div>
                     <label className="text-[9px] font-bold uppercase tracking-[0.4em] text-zinc-500 block mb-3">Mensagem WhatsApp (editável)</label>
                     <textarea
                         value={mensagemWpp}
@@ -327,7 +334,7 @@ export default function AdminAgendamentos() {
                         className="w-full bg-black border-b border-white/20 p-4 text-sm text-white font-modern focus:border-red-400 focus:outline-none h-24 resize-none mb-6 placeholder:text-zinc-700 transition-colors"
                     />
                     <label className="flex items-center gap-4 p-4 border border-white/5 bg-white/[0.02] cursor-pointer mb-6 hover:bg-white/[0.05] transition-colors">
-                        <input type="checkbox" checked={sugerirNovo} onChange={e => setSugerirNovo(e.target.checked)} className="sr-only" />
+                        <input type="checkbox" disabled={modal.ag.status === 'solicitado'} checked={sugerirNovo} onChange={e => setSugerirNovo(e.target.checked)} className="sr-only" />
                         <div className={`w-5 h-5 border flex items-center justify-center shrink-0 transition-colors ${sugerirNovo ? 'border-primary bg-primary' : 'border-white/20'}`}>
                             {sugerirNovo && <span className="text-black text-[12px] font-bold">✓</span>}
                         </div>

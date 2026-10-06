@@ -19,7 +19,7 @@ export default function DashboardPage() {
 
     // Apenas os agendamentos autorizados pelo banco para este cliente.
     const agendamentos = sbApps.filter(a => a.clienteId === user?.id);
-    const proximos = agendamentos.filter(a => ['pendente', 'confirmado', 'aguardando_cliente', 'remarcado'].includes(a.status));
+    const proximos = agendamentos.filter(a => ['solicitado', 'pendente', 'confirmado', 'aguardando_cliente', 'remarcado'].includes(a.status));
     const historico = agendamentos.filter(a => ['concluido', 'cancelado_cliente', 'cancelado_admin', 'rejeitado', 'ausente'].includes(a.status));
     const notifs = notificationStore.getNaoLidasCliente(user?.id);
 
@@ -149,7 +149,7 @@ export default function DashboardPage() {
                                             <div>
                                                 <span className="font-display font-bold uppercase tracking-wider text-lg text-white block mb-2">{ag.servicoNome}</span>
                                                 <span className="font-modern text-sm text-zinc-400 tracking-widest uppercase">
-                                                    {formatData(ag.data)} <span className="opacity-30 mx-2">|</span> {ag.faixaInicio} — {ag.faixaFim}
+                                                    {formatData(ag.data)} <span className="opacity-30 mx-2">|</span> {ag.faixaInicio} — {ag.faixaFim || 'término a definir (sem reserva)'}
                                                 </span>
                                             </div>
                                         </div>
@@ -158,7 +158,7 @@ export default function DashboardPage() {
                                                 {status.label}
                                             </span>
                                             {ag.status === 'aguardando_cliente' && ag.sugestaoNovaData && <button disabled={action.busy} onClick={() => aceitarProposta(ag.id)} className="text-primary text-xs">Aceitar {formatData(ag.sugestaoNovaData)} {ag.sugestaoNovaFaixa}</button>}
-                                            {['pendente','confirmado','remarcado','aguardando_cliente'].includes(ag.status) && (
+                                            {['solicitado', 'pendente','confirmado','remarcado','aguardando_cliente'].includes(ag.status) && (
                                                 <button disabled={action.busy} onClick={() => cancelarAgendamento(ag.id)}
                                                     className="text-red-500/50 hover:text-red-400 text-[10px] font-bold uppercase tracking-widest transition-colors border-b border-transparent hover:border-red-400/30 pb-0.5">
                                                     Cancelar

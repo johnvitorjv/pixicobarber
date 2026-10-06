@@ -1,3 +1,4 @@
+import { serviceDurationLabel } from '../../lib/bookingRules';
 import { useState, useRef } from 'react';
 import { CATEGORIAS, BADGES } from '../../stores/serviceStore';
 import { useStoreSync } from '../../hooks/useStore';
@@ -187,7 +188,7 @@ export default function AdminServicos() {
                                 <div className="flex flex-wrap items-center gap-4 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
                                     <span className="text-zinc-400">{CATEGORIAS.find(c => c.id === servico.categoria)?.label || servico.categoria}</span>
                                     <span className="hidden md:inline text-zinc-700">|</span>
-                                    <span>{servico.duracao} min</span>
+                                    <span>{serviceDurationLabel(servico)}</span>
                                     <span className="hidden md:inline text-zinc-700">|</span>
                                     <span className={`px-2 py-0.5 border ${servico.status === 'ativo' ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10' : 'border-zinc-500/30 text-zinc-400 bg-zinc-500/10'}`}>
                                         {servico.status}
@@ -296,6 +297,8 @@ function ServiceModal({ serviceId, onClose, sbServices, refetchServices }) {
         preco: original?.preco || 0,
         precoPromocional: original?.precoPromocional ?? '',
         duracao: original?.duracao || 30,
+        confirmacaoManual: original?.confirmacaoManual || false,
+        diasPermitidos: original?.diasPermitidos || [0,1,2,3,4,5,6],
         categoria: original?.categoria || 'corte',
         status: original?.status || 'ativo',
         badge: original?.badge || '',
@@ -339,10 +342,11 @@ function ServiceModal({ serviceId, onClose, sbServices, refetchServices }) {
     async function handleSave() {
         await action.execute(async () => {
             const data = { ...form, nome: form.nome.trim(), preco: Number(form.preco),
-                precoPromocional: form.precoPromocional === '' ? null : Number(form.precoPromocional), duracao: Number(form.duracao) };
-            if (!data.nome || data.preco < 0 || !Number.isFinite(data.preco) || !Number.isInteger(data.duracao) || data.duracao < 5 || data.duracao > 480 || (data.precoPromocional !== null && (data.precoPromocional < 0 || !Number.isFinite(data.precoPromocional)))) {
+                precoPromocional: form.precoPromocional === '' ? null : Number(form.precoPromocional), duracao: form.confirmacaoManual ? null : Number(form.duracao), aplicacaoMinutos: form.confirmacaoManual ? 15 : null };
+            if (!data.nome || data.preco < 0 || !Number.isFinite(data.preco) || (!data.confirmacaoManual && (!Number.isInteger(data.duracao) || data.duracao < 5 || data.duracao > 480)) || (data.precoPromocional !== null && (data.precoPromocional < 0 || !Number.isFinite(data.precoPromocional)))) {
                 throw new Error('Confira nome, preço e duração (5 a 480 minutos).');
             }
+            if (!data.diasPermitidos.length) throw new Error('Selecione ao menos um dia permitido.');
             if (serviceId) await updateServiceSupabase(serviceId, data); else await createServiceSupabase(data);
             await refetchServices(); onClose();
         });
@@ -443,7 +447,10 @@ function ServiceModal({ serviceId, onClose, sbServices, refetchServices }) {
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                         <div>
                             <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3 block">Tempo (min)</label>
-                            <input type="number" value={form.duracao} onChange={e => handleChange('duracao', e.target.value)}
+                            <p className="text-xs text-zinc-400 mb-3">{form.confirmacaoManual ? 'Duração total variável; admin define ao confirmar. Aplicação aproximada: 15 min.' : 'Tempo ocupado na cadeira.'}</p>
+                            <label className="flex gap-2 mb-3 text-sm"><input type="checkbox" checked={form.confirmacaoManual} onChange={e=>handleChange('confirmacaoManual',e.target.checked)} /> Confirmação manual / químico</label>
+                            <fieldset className="flex flex-wrap gap-3 mb-3"><legend className="text-xs mb-2">Dias permitidos</legend>{['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map((d,i)=><label key={d} className="text-xs"><input type="checkbox" checked={form.diasPermitidos.includes(i)} onChange={()=>handleChange('diasPermitidos',form.diasPermitidos.includes(i)?form.diasPermitidos.filter(v=>v!==i):[...form.diasPermitidos,i])} /> {d}</label>)}</fieldset>
+                            <input disabled={form.confirmacaoManual} type="number" value={form.duracao} onChange={e => handleChange('duracao', e.target.value)}
                                 className="w-full bg-black border border-white/10 px-4 py-3 text-white font-modern focus:border-primary focus:outline-none transition-colors" />
                         </div>
                         <div>

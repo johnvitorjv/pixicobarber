@@ -15,31 +15,57 @@ export function validateSchedule(c) {
     const start = timeMinutes(c.horarioInicio), end = timeMinutes(c.horarioFim);
     const lunchStart = timeMinutes(c.intervaloAlmoco?.inicio), lunchEnd = timeMinutes(c.intervaloAlmoco?.fim);
     if (![start, end, lunchStart, lunchEnd].every(Number.isFinite) || start >= end || lunchStart >= lunchEnd || lunchStart < start || lunchEnd > end) throw new Error('Verifique os horários de expediente e pausa.');
-    if (!Number.isInteger(c.duracaoSlot) || c.duracaoSlot < 5 || c.duracaoSlot > 120) throw new Error('Intervalo entre horários deve ser de 5 a 120 minutos.');
-    for (const key of ['limiteClientesDia', 'limiteClientesTurno']) {
-        if (!Number.isInteger(c[key]) || c[key] < 1 || c[key] > 100) throw new Error('Limite de clientes deve estar entre 1 e 100.');
-    }
+    if (c.duracaoSlot !== 15) throw new Error('Os inícios devem seguir a grade de 15 minutos.');
     if ((c.ferias || []).some(f => !f.inicio || !f.fim || f.inicio > f.fim)) throw new Error('Verifique as datas de férias.');
     return c;
 }
 export function generateDay(dateStr, config, override) {
     if (!config) return { disponivel: false, motivo: 'Carregando expediente', faixas: [] };
     validateSchedule(config);
+    if (override) {
+        validateOverride(override);
+        return { ...override, faixas: dayGrid(override) };
+    }
     if ((config.ferias || []).some(f => dateStr >= f.inicio && dateStr <= f.fim)) return { disponivel: false, motivo: 'Férias', faixas: [] };
     const block = (config.bloqueiosEspeciais || []).find(b => b.data === dateStr);
     if (block) return { disponivel: false, motivo: block.motivo || 'Fechado', faixas: [] };
-    if (override?.disponivel === false) return { ...override, faixas: [] };
-    if (!override?.disponivel && !config.diasFuncionamento.includes(new Date(dateStr + 'T12:00:00').getDay())) return { disponivel: false, motivo: 'Fechado', faixas: [] };
-    const faixas = [];
-    const start = timeMinutes(config.horarioInicio), end = timeMinutes(config.horarioFim);
-    const lunchStart = timeMinutes(config.intervaloAlmoco.inicio), lunchEnd = timeMinutes(config.intervaloAlmoco.fim);
-    const format = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
-    for (let t = start; t + config.duracaoSlot <= end; t += config.duracaoSlot) {
-        if (t < lunchEnd && t + config.duracaoSlot > lunchStart) continue;
-        const blocked = (override?.faixas || []).some(f => f.disponivel === false && t < timeMinutes(f.fim) && t + config.duracaoSlot > timeMinutes(f.inicio));
-        faixas.push({ id: format(t), inicio: format(t), fim: format(t + config.duracaoSlot), disponivel: !blocked });
+    if (!config.diasFuncionamento.includes(new Date(dateStr + 'T12:00:00').getDay())) return { disponivel: false, motivo: 'Fechado', faixas: [] };
+    const day = defaultOpenDay(config);
+    return { ...day, faixas: dayGrid(day) };
+}
+export function defaultOpenDay(config) {
+    return { disponivel: true, intervalos: [
+        { inicio: config.horarioInicio, fim: config.intervaloAlmoco.inicio },
+        { inicio: config.intervaloAlmoco.fim, fim: config.horarioFim },
+    ].filter(f => f.inicio < f.fim), bloqueios: [] };
+}
+export function validateOverride(day) {
+    if (typeof day?.disponivel !== 'boolean' || !Array.isArray(day.intervalos) || !Array.isArray(day.bloqueios)) throw new Error('Exceção de data inválida.');
+    for (const ranges of [day.intervalos, day.bloqueios]) {
+        for (const f of ranges) if (!Number.isFinite(timeMinutes(f.inicio)) || !Number.isFinite(timeMinutes(f.fim)) || f.inicio >= f.fim) throw new Error('Verifique o início e o fim de cada intervalo.');
     }
-    return { disponivel: true, faixas };
+    if (day.disponivel && !day.intervalos.length) throw new Error('Informe pelo menos um intervalo de trabalho.');
+    const sorted = [...day.intervalos].sort((a,b) => a.inicio.localeCompare(b.inicio));
+    if (sorted.some((f,i) => i > 0 && f.inicio <= sorted[i-1].fim)) throw new Error('Una intervalos contíguos e remova sobreposições.');
+    return day;
+}
+export function fitsDay(day, start, end) {
+    return day.disponivel && day.intervalos?.some(f => start >= timeMinutes(f.inicio) && end <= timeMinutes(f.fim)) &&
+        !day.bloqueios?.some(f => start < timeMinutes(f.fim) && end > timeMinutes(f.inicio));
+}
+function dayGrid(day) {
+    if (!day.disponivel) return [];
+    const result = [], format = m => String(Math.floor(m / 60)).padStart(2,'0') + ':' + String(m % 60).padStart(2,'0');
+    for (let t = 0; t + 15 < 1440; t += 15) {
+        if (day.intervalos.some(f => t >= timeMinutes(f.inicio) && t < timeMinutes(f.fim))) result.push({ id: format(t), inicio: format(t), fim: format(t + 15), disponivel: !!fitsDay(day,t,t+15) });
+    }
+    return result;
+}
+export function serviceAllowedOnDate(service, date) {
+    return !service?.diasPermitidos || service.diasPermitidos.includes(new Date(date + 'T12:00:00').getDay());
+}
+export function serviceDurationLabel(service) {
+    return service.confirmacaoManual ? 'Duração variável · confirmação manual' : `${service.duracao} min`;
 }
 export function mutationMessage(error) {
     if (error.code === '23P01' || error.code === '23505') return 'Esse horário acabou de ficar indisponível. Escolha outro.';
