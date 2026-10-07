@@ -484,13 +484,12 @@ function ServicosSection() {
 /* ─────────────────────────────────────────────────
    GALERIA
    ───────────────────────────────────────────────── */
-function GalleryItem({ src, index, clipClass }) {
+function GalleryItem({ src, index }) {
   const itemRef = useRef(null);
   const mobileActive = useMobileCenterActive(itemRef);
-  const aspect = index === 0 ? 'aspect-[2/3]' : index === 1 ? 'aspect-square md:col-span-2' : index === 2 ? 'aspect-video' : index === 3 ? 'aspect-square' : 'aspect-[3/4]';
 
   return (
-    <div ref={itemRef} className={`gallery-item ${aspect} overflow-hidden ${clipClass || ''} group`}>
+    <div ref={itemRef} className="gallery-item aspect-square min-w-0 overflow-hidden group">
       <img
         className={`w-full h-full object-cover transition-all duration-1000 ${mobileActive ? 'brightness-100 grayscale-0 scale-110' : 'grayscale brightness-50 scale-100'} md:grayscale md:brightness-50 md:scale-100 md:group-hover:brightness-100 md:group-hover:grayscale-0 md:group-hover:scale-110`}
         src={src}
@@ -515,8 +514,6 @@ function GaleriaSection() {
     return () => ctx.revert();
   }, []);
 
-  const clipClasses = ['clip-shard', 'clip-diagonal', '', 'clip-abstract', ''];
-
   return (
     <section ref={sectionRef} className="py-20 bg-background-dark" id="galeria">
       <div className="max-w-[1600px] mx-auto px-6 md:px-8 mb-12">
@@ -525,9 +522,9 @@ function GaleriaSection() {
         <p className="text-zinc-500 font-modern mt-4 max-w-lg">Cada corte é pensado para valorizar seu visual, sua presença e sua identidade.</p>
       </div>
       <div className="max-w-full mx-auto px-4 overflow-hidden">
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
           {IMAGES.galeria.map((src, i) => (
-            <GalleryItem key={src} src={src} index={i} clipClass={clipClasses[i]} />
+            <GalleryItem key={src} src={src} index={i} />
           ))}
         </div>
       </div>
@@ -566,7 +563,7 @@ function ContatoSection() {
       <div className="absolute left-1/2 top-0 -translate-x-1/2 w-px h-full bg-gradient-to-b from-primary/50 to-transparent hidden lg:block" />
 
       <div className="max-w-[1400px] mx-auto relative z-10">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-32">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 xl:gap-24">
           <div className="contact-address space-y-16 md:space-y-24">
             <div>
               <h4 className="text-[9px] font-bold uppercase tracking-[1em] text-primary mb-12">Localização</h4>
@@ -595,9 +592,9 @@ function ContatoSection() {
             </div>
           </div>
 
-          <div className="contact-cta relative bg-zinc-900 p-8 md:p-12 lg:p-20 clip-diagonal border border-white/5">
+          <div className="contact-cta relative min-w-0 bg-zinc-900 p-6 sm:p-8 md:p-12 lg:p-8 xl:p-12 border border-white/5">
             <h4 className="text-[9px] font-bold uppercase tracking-[1em] text-primary mb-12">Agendamento</h4>
-            <h2 className="text-4xl md:text-5xl lg:text-7xl font-display font-bold uppercase leading-none mb-10">
+            <h2 className="text-4xl md:text-5xl xl:text-6xl 2xl:text-7xl font-display font-bold uppercase leading-none mb-10">
               Pronto pra<br />evoluir?
             </h2>
             <p className="text-zinc-400 font-modern text-lg mb-8 max-w-sm">
@@ -606,7 +603,7 @@ function ContatoSection() {
             <div className="flex flex-col gap-4">
               <Link
                 to="/agendar"
-                className="w-full group relative overflow-hidden bg-primary text-black py-7 md:py-8 font-display font-bold uppercase tracking-[0.5em] text-xs text-center hover:scale-[1.02] transition-transform"
+                className="w-full group relative overflow-hidden bg-primary text-black px-3 py-7 md:py-8 font-display font-bold uppercase tracking-[0.2em] sm:tracking-[0.5em] text-xs text-center hover:scale-[1.02] transition-transform"
               >
                 <span className="relative z-10 group-hover:text-white transition-colors duration-500">Agendar pelo Site</span>
                 <div className="absolute inset-0 bg-black translate-y-full group-hover:translate-y-0 transition-transform duration-500" />
@@ -615,7 +612,7 @@ function ContatoSection() {
                 href={whatsappLink}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full group relative overflow-hidden bg-[#25D366]/10 border border-[#25D366]/30 text-[#25D366] py-7 md:py-8 font-display font-bold uppercase tracking-[0.5em] text-xs text-center hover:bg-[#25D366] hover:text-white transition-all duration-500 hover:scale-[1.02]"
+                className="w-full group relative overflow-hidden bg-[#25D366]/10 border border-[#25D366]/30 text-[#25D366] px-3 py-7 md:py-8 font-display font-bold uppercase tracking-[0.2em] sm:tracking-[0.5em] text-xs text-center hover:bg-[#25D366] hover:text-white transition-all duration-500 hover:scale-[1.02]"
               >
                 <span className="relative z-10">Falar pelo WhatsApp</span>
               </a>
