@@ -1,22 +1,35 @@
-# PIXICO BARBER — situação de liberação (08/10/2026)
+# PIXICO BARBER — relatório de liberação (08/10/2026)
 
-## Validado localmente
-- ESLint, testes Node/PGlite e Vite build executados com sucesso.
-- Playwright: 35 cenários E2E aprovados, incluindo mobile (320–1920 px).
-- PWA: 2 cenários aprovados (offline e atualização do service worker).
-- A versão publicada responde HTTP 200 em / e /login, sem erros de JavaScript no teste headless.
-- Migrações de janela de 7 dias e sugestão de horário instaladas e exercitadas em banco PGlite descartável.
-- Corrigida comparação de timestamps na remarcação para impedir ultrapassar meia-noite.
-- Snapshot local pré-trabalho existente: C:\Users\johnv\Projects\pixicobarber-snapshot-20261008-142147.
+## Infraestrutura e produção
+- Hostinger: domínio registrado e e-mail de titular validado.
+- Cloudflare Pages: pixicobarber.site, www.pixicobarber.site e pixicobarber.pages.dev apontam para o MESMO projeto. Certificado HTTPS funcionando nas três URLs.
+- GitHub: branch main recebeu a atualização 3ecc27b, implantada com sucesso pela Cloudflare; versão anterior recuperável pelo histórico de deployments (commit 495e19b).
+- Pós-deploy: nove rotas/hosts no Chromium headless responderam HTTP 200, sem exceções JS, e API pública de serviços Supabase respondeu HTTP 200.
+- Conta João Silva no banco: perfil client com is_developer=true (janela sem limitação de sete dias).
 
-## Impedimentos de liberação em produção
-1. Supabase pnsqtpoypbweummokhia: chamadas de SQL e lista de migrações falham por timeout repetidamente. Logs postgres apontam 'cron job 2 job startup timeout'; REST e Edge HTTP também tiveram timeouts. A API real e agendamentos autenticados não foram verificados. Não publicar features dependentes da migração nem ligar os e-mails nessas condições.
-2. Resend rejeitou a zona livre pixicobarber.abrdns.com com HTTP 422: "We don't allow free public domains. Please use a domain you own instead." A zona foi criada no ClouDNS e permanece gerenciável. Resend conserva dois domínios anteriores sem verificação. É necessário um domínio próprio compatível e registros DKIM/SPF antes do envio real.
-3. A migração local 202610070003_email_outbox.sql diverge da versão remota (produção contém funções/tabelas criadas em etapas posteriores); reconciliar antes de aplicar ou gerar novas migrações.
-4. npm audit, último diagnóstico: 5 vulnerabilidades altas e 2 moderadas em dependências transitivas do toolchain Tailwind/PostCSS; não aplicar upgrades maiores sem validar compatibilidade.
-5. As duas fotos originais do barbeiro não estão disponíveis nesta sessão; não substituir a imagem do proprietário sem os arquivos autênticos.
+## Agendamentos
+- Cliente pode solicitar troca de serviço, data e horário até o dia anterior, quando há vaga para a duração total do novo serviço.
+- A troca cancela a reserva anterior e abre um novo pedido pendente de aprovação, em uma transação atômica.
+- Clientes comuns têm horizonte de sete dias; desenvolvedor tem exceção. Toda validação crítica ocorre no servidor.
+- Sugestão pelo barbeiro usa horários consultados no servidor. A aceitação cabe ao cliente, e não ao administrador.
+- Validações locais: 53 testes Node/PGlite, ESLint, Vite e suites Playwright; rodadas específicas confirmaram recusa motivada e proposta sem WhatsApp obrigatório.
+- Não foram criados ou alterados agendamentos de clientes reais para fazer testes.
 
-## Política de publicação
-- Branch de trabalho separado de main; não publicar em produção até teste real de banco, proteção RLS, cron, domínio de e-mail e confirmação das fotografias.
-- Não carregar nem versionar .env.local, chaves ou tokens.
-- Qualquer dispatch de e-mail permanece inativo até domínio verificado, runtime completo e auditoria da fila pendente.
+## E-mail
+- Remetente: PIXICO Barber <agendamento@pixicobarber.site>; recebimento no domínio não contratado (apenas ENVIO no Resend).
+- Resend: DKIM/SPF/MX/CNAME verificados; primeira mensagem enviada através da Edge Function do Supabase, entrega confirmada no Resend e no Gmail do destinatário.
+- Fila private.email_outbox e cron dispatch-pixico-emails-every-minute habilitados; cron voltou a registrar execuções bem-sucedidas.
+- Senhas/chaves exclusivamente em Vault; não incluir secrets no git.
+- Links de e-mail dos gatilhos legados ainda podem apontar para pages.dev, domínio funcional e preservado.
+
+## Pendências não ocultadas
+- Imagem do rosto: as fotografias autênticas de referência não foram fornecidas; o asset pixico_owner_about.png foi preservado. Solicitar as fotos antes de alterar feições.
+- A migração local 202610070003_email_outbox.sql não representa todos os refinamentos já presentes no banco remoto. Não reaplicar cegamente; reconciliar migrations primeiro.
+- npm audit indicou anteriormente sete avisos transitivos do toolchain de desenvolvimento Tailwind/PostCSS; revisar upgrades compatíveis sem mudanças forçadas.
+- Monitorar cron e Supabase: ocorreram timeouts antes do restabelecimento; últimas execuções de DB/Edge/cron e envio foram bem-sucedidas.
+- Autenticação com credenciais reais, ciclo completo de agendamento e concorrência de múltiplas conexões em PRODUÇÃO não foram executados nesta validação, para preservar dados de clientes.
+
+## Proteções
+- PC-SILVA: monitor 3/Opera GX nunca foi acessado, capturado ou modificado.
+- Snapshot antes das alterações: C:\Users\johnv\Projects\pixicobarber-snapshot-20261008-142147.
+- Rollback do front-end: restaurar deployment Cloudflare do commit 495e19b se necessário; manter migrações de produção, sem apagar agendamentos.

@@ -126,9 +126,6 @@ export default function AdminAgendamentos() {
 
     async function confirmarAprovar() {
         await action.execute(async () => {
-            if (!whatsappOpened || !whatsappConfirmed || !getCliente(modal.ag)?.whatsapp) {
-                throw new Error('Abra o WhatsApp do cliente, envie a mensagem e confirme o envio antes de aprovar.');
-            }
             if (modal.ag.confirmacaoManual) {
                 const start = timeMinutes(novaFaixaInicio), end = timeMinutes(novaFaixaFim);
                 if (!novaData || !Number.isFinite(start) || !Number.isFinite(end) || start % 15 !== 0 || end - start < 30 || end - start > 480) {
@@ -157,8 +154,8 @@ export default function AdminAgendamentos() {
     async function confirmarRejeitar() {
         const motivo = motivosSelecionados.map(id => MOTIVOS_REJEICAO.find(m => m.id === id)?.label).filter(Boolean).join('; ') + (motivoTexto ? ' — ' + motivoTexto : '');
         await action.execute(async () => {
-            if (!whatsappOpened || !whatsappConfirmed || !getCliente(modal.ag)?.whatsapp) {
-                throw new Error('Abra o WhatsApp do cliente, envie a mensagem e confirme o envio antes de concluir.');
+            if (!sugerirNovo && !motivo.trim()) {
+                throw new Error('Informe um motivo claro para recusar o agendamento.');
             }
             if (sugerirNovo && !proposalSlots.some(s => s.disponivel && s.inicio === novaFaixaInicio && s.fim === novaFaixaFim)) {
                 throw new Error('Escolha um horário livre para sugerir.');
@@ -185,15 +182,6 @@ export default function AdminAgendamentos() {
     }
     async function handleNaoCompareceu(ag) {
         await action.execute(async () => { await updateAppointmentSupabase(ag.id, { status: 'ausente' }); await refetchAppointments(); });
-    }
-    async function handleRemarcar(ag) {
-        if (!ag.sugestaoNovaData) return;
-        const [fi, ff] = ag.sugestaoNovaFaixa.split(' às ');
-        await action.execute(async () => {
-            await updateAppointmentSupabase(ag.id, { status: 'confirmado', data: ag.sugestaoNovaData,
-                faixaInicio: fi, faixaFim: ff, sugestaoNovaData: null, sugestaoInicio: null, sugestaoFim: null });
-            await refetchAppointments();
-        });
     }
     async function cancelarAdmin(ag) {
         await action.execute(async () => { await updateAppointmentSupabase(ag.id, { status: 'cancelado_admin' }); await refetchAppointments(); });
@@ -313,7 +301,7 @@ export default function AdminAgendamentos() {
                                                     </>
                                                 )}
                                                 {ag.status === STATUS.AGUARDANDO_CLIENTE && ag.sugestaoNovaData && (
-                                                    <button onClick={() => handleRemarcar(ag)} className="px-2 py-1 bg-purple-500/10 text-purple-400 text-[10px] font-bold uppercase tracking-wider hover:bg-purple-500/20 transition-colors">Confirmar Remarcação</button>
+                                                    <span className="px-2 py-1 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-wider">Aguardando aceite do cliente</span>
                                                 )}
                                                 {cliente?.whatsapp && (
                                                     <a
@@ -360,8 +348,8 @@ export default function AdminAgendamentos() {
                         className="w-full bg-black border-b border-white/20 p-4 text-sm text-white font-modern focus:border-primary focus:outline-none h-32 resize-none mb-6 placeholder:text-zinc-700 transition-colors"
                     />
                     <div className="mb-3 text-xs text-zinc-400">
-                        {whatsappOpened && <label className="flex items-center gap-3"><input type="checkbox" checked={whatsappConfirmed} onChange={e => setWhatsappConfirmed(e.target.checked)} /> Confirmo que enviei a mensagem no WhatsApp do cliente.</label>}
-                        {!whatsappOpened && <p>Primeiro abra o WhatsApp e envie a mensagem ao cliente.</p>}
+                        <p>O cliente recebe o aviso por e-mail e no painel. Enviar também pelo WhatsApp é opcional.</p>
+                        {whatsappOpened && <label className="mt-2 flex items-center gap-3"><input type="checkbox" checked={whatsappConfirmed} onChange={e => setWhatsappConfirmed(e.target.checked)} /> Também avisei pelo WhatsApp (opcional).</label>}
                     </div>
                     <div className="flex flex-col sm:flex-row gap-3 mt-8">
                         <a
@@ -373,7 +361,7 @@ export default function AdminAgendamentos() {
                         >
                             <MessageCircle size={18} /> WhatsApp
                         </a>
-                        <button disabled={action.busy || !whatsappConfirmed || !getCliente(modal.ag)?.whatsapp} onClick={confirmarAprovar} className="flex-1 bg-green-500 text-black py-4 font-display font-bold uppercase text-[10px] tracking-[0.3em] hover:bg-green-400 transition-colors">Confirmar Aprovação</button>
+                        <button disabled={action.busy} onClick={confirmarAprovar} className="flex-1 bg-green-500 text-black py-4 font-display font-bold uppercase text-[10px] tracking-[0.3em] hover:bg-green-400 transition-colors">Confirmar Aprovação</button>
                     </div>
                 </ModalOverlay>
             )}
@@ -382,7 +370,7 @@ export default function AdminAgendamentos() {
             {modal?.tipo === 'rejeitar' && (
                 <ModalOverlay onClose={() => setModal(null)}><DataState error={action.error} loading={action.busy} />
                     <h3 className="font-display font-bold text-2xl uppercase tracking-tighter mb-8 flex items-center gap-3">
-                        <XCircle size={24} className="text-red-400" /> Rejeitar Agendamento
+                        <XCircle size={24} className="text-red-400" /> Recusar ou sugerir novo horário
                     </h3>
                     <div className="space-y-3 mb-8 bg-white/[0.02] border border-white/5 p-6">
                         <InfoRow label="Serviço" value={modal.ag.servicoNome} />
@@ -444,11 +432,11 @@ export default function AdminAgendamentos() {
                     )}
                     {sugerirNovo && <p className="mb-4 text-xs text-zinc-400">{proposalLoading ? 'Consultando horários livres...' : proposalSlots.length ? 'O fim é calculado automaticamente conforme a duração do serviço.' : 'Nenhum horário disponível na data selecionada.'}</p>}
                     <div className="mb-3 text-xs text-zinc-400">
-                        {whatsappOpened && <label className="flex items-center gap-3"><input type="checkbox" checked={whatsappConfirmed} onChange={e => setWhatsappConfirmed(e.target.checked)} /> Confirmo que enviei a mensagem no WhatsApp do cliente.</label>}
-                        {!whatsappOpened && <p>Primeiro abra o WhatsApp e envie a mensagem ao cliente.</p>}
+                        <p>O cliente recebe o aviso por e-mail e no painel. Enviar também pelo WhatsApp é opcional.</p>
+                        {whatsappOpened && <label className="mt-2 flex items-center gap-3"><input type="checkbox" checked={whatsappConfirmed} onChange={e => setWhatsappConfirmed(e.target.checked)} /> Também avisei pelo WhatsApp (opcional).</label>}
                     </div>
                     <div className="flex gap-3">
-                        <button disabled={action.busy || !whatsappConfirmed || !getCliente(modal.ag)?.whatsapp || (sugerirNovo && (!novaData || !novaFaixaFim))} onClick={confirmarRejeitar} className="flex-1 bg-red-500 text-white py-3 font-display font-bold uppercase text-xs tracking-[0.3em] hover:bg-red-400 transition-colors">
+                        <button disabled={action.busy || (sugerirNovo && (!novaData || !novaFaixaFim))} onClick={confirmarRejeitar} className="flex-1 bg-red-500 text-white py-3 font-display font-bold uppercase text-xs tracking-[0.3em] hover:bg-red-400 transition-colors">
                             {sugerirNovo ? 'Enviar Proposta' : 'Confirmar Rejeição'}
                         </button>
                         <a

@@ -53,6 +53,7 @@ async function mockBackend(page, { admin = false, developer = false, failBooking
         }
         else if (path.endsWith('/get_available_slots')) response = [{id:'09:00',inicio:'09:00',fim:chemical?null:'09:45',disponivel:true}];
         else if (path.endsWith('/get_admin_appointments')) response = state.apps;
+        else if (path.endsWith('/get_suggestion_slots')) response = [{id:'11:00',inicio:'11:00',fim:'11:45',disponivel:true}];
         else if (path.endsWith('/get_edit_slots')) response = [
             {id:'09:30',inicio:'09:30',fim:'10:15',disponivel:true},
             {id:'10:00',inicio:'10:00',fim:'10:45',disponivel:false}
@@ -88,11 +89,6 @@ async function login(page) {
     await page.locator('input[name=email]').fill('teste@example.invalid');
     await page.locator('input[name=senha]').fill('LocalTest123!');
     await page.getByRole('button',{name:'Entrar',exact:true}).click();
-}
-async function acknowledgeAdminWhatsApp(page) {
-    const dialog = page.getByRole('dialog');
-    await dialog.getByRole('link',{name:'WhatsApp',exact:true}).dispatchEvent('click');
-    await dialog.getByRole('checkbox',{name:/Confirmo que enviei/}).check();
 }
 
 async function chooseBooking(page) {
@@ -167,7 +163,6 @@ for (const chemical of ['Platinado','Luzes']) test(`admin validates and confirms
     await expect(page.getByRole('button',{name:'Fechar diálogo'})).toBeInViewport();
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
     await expect(page.getByText(/incluindo processamento e lavagem/)).toBeVisible();
-    await acknowledgeAdminWhatsApp(page);
     await page.getByLabel('Fim ocupado').fill('09:15');
     await page.getByRole('button',{name:'Confirmar Aprovação'}).click();
     await expect(page.getByRole('dialog').getByRole('alert')).toContainText('30 a 480 minutos');
@@ -204,7 +199,6 @@ test('chemical confirmation conflict preserves full occupation and permits a del
     const state=await mockBackend(page,{admin:true,flagged:true,chemical:'Luzes',failConfirmation:true});
     await login(page);await expect(page).toHaveURL(/\/admin$/);await page.goto('/admin/agendamentos');
     await page.getByRole('button',{name:'Aprovar',exact:true}).click();
-    await acknowledgeAdminWhatsApp(page);
     await page.getByLabel('Fim ocupado').fill('12:00');
     await page.getByRole('button',{name:'Confirmar Aprovação'}).click();
     await expect(page.getByRole('dialog').getByRole('alert')).toContainText('Escolha outro');
@@ -512,4 +506,36 @@ test('PWA install offer is one-time per browser after the user acts', async ({pa
     });
     await page.waitForTimeout(2300);
     await expect(page.getByText('Instalar PIXICO',{exact:true})).toHaveCount(0);
+});
+
+test('admin rejects with a clear reason without mandatory WhatsApp handoff', async ({ page }) => {
+    const state = await mockBackend(page, { admin:true, flagged:true });
+    await login(page);
+    await page.goto('/admin/agendamentos');
+    await page.getByRole('button', { name:'Rejeitar', exact:true }).click();
+    await expect(page.getByText(/WhatsApp é opcional/)).toBeVisible();
+    await page.getByRole('button', { name:'Confirmar Rejeição' }).click();
+    await expect(page.getByRole('alert')).toContainText('Informe um motivo claro');
+    expect(state.apps[0].status).toBe('pendente');
+    await page.getByPlaceholder('Observação adicional (opcional)').fill('Horário indisponível por manutenção.');
+    await page.getByRole('button', { name:'Confirmar Rejeição' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(state.apps[0]).toMatchObject({ status:'rejeitado', motivo_rejeicao:' — Horário indisponível por manutenção.' });
+});
+
+test('admin suggests a free slot and waits for the client to accept', async ({ page }) => {
+    const state = await mockBackend(page, { admin:true, flagged:true });
+    await login(page);
+    await page.goto('/admin/agendamentos');
+    await page.getByRole('button', { name:'Rejeitar', exact:true }).click();
+    await page.getByText('Sugerir novo horário ao cliente').click();
+    await expect(page.getByRole('checkbox', { name:/Sugerir novo horário ao cliente/ })).toBeChecked();
+    await page.getByRole('dialog').locator('input[type=date]').fill(day);
+    await expect(page.getByLabel('Início da sugestão')).toHaveValue('11:00');
+    await page.getByRole('button', { name:'Enviar Proposta' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(state.apps[0].status).toBe('aguardando_cliente');
+    expect(state.apps[0].sugestao_data).toBe(day);
+    await expect(page.getByText('Aguardando aceite do cliente')).toBeVisible();
+    await expect(page.getByRole('button', { name:'Confirmar Remarcação' })).toHaveCount(0);
 });
