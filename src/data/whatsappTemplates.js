@@ -1,40 +1,30 @@
-// ═══════════════════════════════════════════════
-// PIXICO BARBER — WhatsApp Templates
-// ═══════════════════════════════════════════════
-
+// Mensagens curtas e sem símbolos especiais para máxima compatibilidade no WhatsApp.
 import { normalizeWhatsApp } from '../lib/contact';
 import settingsStore from '../stores/settingsStore';
 
-function formatData(dataStr) {
-    if (!dataStr) return '';
-    const [y, m, d] = dataStr.split('-');
-    return `${d}/${m}/${y}`;
+function formatData(data) {
+    if (!data) return '';
+    const [ano, mes, dia] = data.split('-');
+    return `${dia}/${mes}/${ano}`;
 }
 
 export const TEMPLATES = {
-    aprovacao: ({ nome, data, faixaInicio, faixaFim }) =>
-        `Olá, ${nome}! ✅ Seu horário na PIXICO Barber foi confirmado para ${formatData(data)} na faixa de ${faixaInicio} às ${faixaFim}. Pedimos que chegue sem atraso para manter a organização dos atendimentos. Qualquer imprevisto, nos avise. Obrigado!`,
-
-    rejeicao: ({ nome, data, faixa, motivo }) =>
-        `Olá, ${nome}! O horário que você solicitou para ${formatData(data)} em ${faixa} não está disponível no momento por: ${motivo}. Podemos verificar outra data/horário para você. Nos avise pelo WhatsApp se quiser reagendar!`,
-
-    rejeicao_com_sugestao: ({ nome, data, faixa, motivo, novaData, novaFaixa }) =>
-        `Olá, ${nome}! O horário que você solicitou para ${formatData(data)} em ${faixa} não está disponível: ${motivo}. Podemos te atender em ${formatData(novaData)} na faixa de ${novaFaixa}? Se estiver bom para você, nos confirme por aqui. 🤝`,
-
-    remarcacao_confirmada: ({ nome, data, faixaInicio, faixaFim }) =>
-        `Olá, ${nome}! ✅ Seu horário foi remarcado com sucesso para ${formatData(data)} na faixa de ${faixaInicio} às ${faixaFim}. Te esperamos na PIXICO Barber! 💈`,
-
+    aprovacao: ({ nome, data, faixaInicio }) =>
+        `Olá, ${nome}! Seu horário na Pixico Barber foi confirmado: ${formatData(data)}, às ${faixaInicio}. Até lá!`,
+    rejeicao: ({ nome, data, motivo }) =>
+        `Olá, ${nome}! Não foi possível confirmar seu horário de ${formatData(data)}. ${motivo ? `Motivo: ${motivo}.` : ''} Acesse o site para ver novas opções.`,
+    rejeicao_com_sugestao: ({ nome, novaData, novaFaixa, motivo }) =>
+        `Olá, ${nome}! Temos outra opção para você: ${formatData(novaData)}, ${novaFaixa}. ${motivo ? `Motivo da alteração: ${motivo}.` : ''} Confira e aceite no seu painel: https://pixicobarber.pages.dev/painel`,
+    remarcacao_confirmada: ({ nome, data, faixaInicio }) =>
+        `Olá, ${nome}! Seu novo horário foi confirmado: ${formatData(data)}, às ${faixaInicio}. Te esperamos!`,
     lembrete: ({ nome, data, faixaInicio, servicoNome }) =>
-        `Olá, ${nome}! 🔔 Lembrete: Seu ${servicoNome} está marcado para amanhã (${formatData(data)}) às ${faixaInicio}. Conte com a gente! Se precisar de algo, avise. PIXICO Barber 💈`,
-
+        `Olá, ${nome}! Lembrete Pixico: ${servicoNome}, ${formatData(data)} às ${faixaInicio}. Se não puder comparecer, cancele pelo painel.`,
     cobranca_confirmacao: ({ nome }) =>
-        `Olá, ${nome}! Vimos que seu horário ainda está pendente de confirmação. Pode confirmar para nós? Obrigado! PIXICO Barber 💈`,
-
+        `Olá, ${nome}! Sua solicitação na Pixico está aguardando aprovação. Acompanhe pelo site.`,
     nao_compareceu: ({ nome, data }) =>
-        `Olá, ${nome}. Notamos que você não compareceu ao seu horário do dia ${formatData(data)}. Caso tenha tido algum imprevisto, entre em contato para reagendarmos. PIXICO Barber`,
-
+        `Olá, ${nome}. Você não compareceu ao agendamento de ${formatData(data)}. Em caso de imprevisto, fale conosco.`,
     boas_vindas: ({ nome }) =>
-        `Olá, ${nome}! 👋 Bem-vindo à PIXICO Barber! Seu cadastro foi realizado com sucesso. Agora você pode agendar pelo nosso site. Qualquer dúvida, estamos aqui! 💈`,
+        `Olá, ${nome}! Bem-vindo à Pixico Barber. Agende seu próximo corte pelo nosso site!`,
 };
 
 export function gerarLinkWhatsApp(mensagem, numero) {

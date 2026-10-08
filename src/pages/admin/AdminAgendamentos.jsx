@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { requireSupabase } from '../../lib/supabase';
 import { useAction } from '../../hooks/useAction';
 import DataState from '../../components/DataState';
 import { timeMinutes } from '../../lib/bookingRules';
@@ -35,6 +36,10 @@ export default function AdminAgendamentos() {
     const [novaFaixaInicio, setNovaFaixaInicio] = useState('');
     const [novaFaixaFim, setNovaFaixaFim] = useState('');
     const [mensagemWpp, setMensagemWpp] = useState('');
+    const [whatsappOpened, setWhatsappOpened] = useState(false);
+    const [whatsappConfirmed, setWhatsappConfirmed] = useState(false);
+    const [proposalSlots, setProposalSlots] = useState([]);
+    const [proposalLoading, setProposalLoading] = useState(false);
 
     // Conclusão state
     const [valorCobrado, setValorCobrado] = useState('');
@@ -44,6 +49,42 @@ export default function AdminAgendamentos() {
     const { appointments: sbAppointments, loading: sbLoading, error: queryError, refetch: refetchAppointments } = useSupabaseAppointments();
 
     const { clients, loading: clientsLoading, error: clientsError, refetch: refetchClients } = useSupabaseClients();
+    useEffect(() => {
+        if (modal?.tipo !== 'rejeitar' || !sugerirNovo || !novaData) return;
+        let live = true;
+        queueMicrotask(() => { if (live) setProposalLoading(true); });
+        requireSupabase().rpc('get_suggestion_slots', { p_appointment: modal.ag.id, p_date: novaData })
+            .then(({ data, error }) => {
+                if (!live) return;
+                const available = error ? [] : (data || []).filter(slot => slot.disponivel);
+                setProposalSlots(available);
+                const first = available[0];
+                setNovaFaixaInicio(first?.inicio || '');
+                setNovaFaixaFim(first?.fim || '');
+                setProposalLoading(false);
+            });
+        return () => { live = false; };
+    }, [modal?.ag?.id, modal?.tipo, novaData, sugerirNovo]);
+
+    useEffect(() => {
+        if (modal?.tipo !== 'rejeitar') return;
+        const reason = [
+            ...motivosSelecionados.map(id => MOTIVOS_REJEICAO.find(m => m.id === id)?.label).filter(Boolean),
+            motivoTexto.trim()
+        ].filter(Boolean).join('; ');
+        const params = {
+            nome: modal.ag._clienteNome || 'Cliente',
+            data: modal.ag.data,
+            motivo: reason,
+            novaData,
+            novaFaixa: novaFaixaInicio && novaFaixaFim ? novaFaixaInicio + ' às ' + novaFaixaFim : ''
+        };
+        queueMicrotask(() => {
+            setMensagemWpp(sugerirNovo ? TEMPLATES.rejeicao_com_sugestao(params) : TEMPLATES.rejeicao(params));
+            setWhatsappConfirmed(false);
+        });
+    }, [modal?.tipo, modal?.ag?.id, modal?.ag?.data, modal?.ag?._clienteNome, motivosSelecionados, motivoTexto, sugerirNovo, novaData, novaFaixaInicio, novaFaixaFim]);
+
     // Dados persistidos exclusivamente pelo Supabase.
     const agendamentos = (() => {
         let all = sbAppointments;
@@ -74,6 +115,8 @@ export default function AdminAgendamentos() {
     }
 
     function abrirAprovar(ag) {
+        setWhatsappOpened(false);
+        setWhatsappConfirmed(false);
         const cliente = getCliente(ag);
         const msg = TEMPLATES.aprovacao({ nome: cliente?.nome || 'Cliente', data: ag.data, faixaInicio: ag.faixaInicio, faixaFim: ag.faixaFim });
         setMensagemWpp(ag.status === 'solicitado' ? 'Vamos avaliar a duração total e confirmar seu atendimento químico.' : msg);
@@ -83,6 +126,9 @@ export default function AdminAgendamentos() {
 
     async function confirmarAprovar() {
         await action.execute(async () => {
+            if (!whatsappOpened || !whatsappConfirmed || !getCliente(modal.ag)?.whatsapp) {
+                throw new Error('Abra o WhatsApp do cliente, envie a mensagem e confirme o envio antes de aprovar.');
+            }
             if (modal.ag.confirmacaoManual) {
                 const start = timeMinutes(novaFaixaInicio), end = timeMinutes(novaFaixaFim);
                 if (!novaData || !Number.isFinite(start) || !Number.isFinite(end) || start % 15 !== 0 || end - start < 30 || end - start > 480) {
@@ -94,6 +140,8 @@ export default function AdminAgendamentos() {
     }
 
     function abrirRejeitar(ag) {
+        setWhatsappOpened(false);
+        setWhatsappConfirmed(false);
         const cliente = getCliente(ag);
         setMotivosSelecionados([]);
         setMotivoTexto('');
@@ -109,6 +157,12 @@ export default function AdminAgendamentos() {
     async function confirmarRejeitar() {
         const motivo = motivosSelecionados.map(id => MOTIVOS_REJEICAO.find(m => m.id === id)?.label).filter(Boolean).join('; ') + (motivoTexto ? ' — ' + motivoTexto : '');
         await action.execute(async () => {
+            if (!whatsappOpened || !whatsappConfirmed || !getCliente(modal.ag)?.whatsapp) {
+                throw new Error('Abra o WhatsApp do cliente, envie a mensagem e confirme o envio antes de concluir.');
+            }
+            if (sugerirNovo && !proposalSlots.some(s => s.disponivel && s.inicio === novaFaixaInicio && s.fim === novaFaixaFim)) {
+                throw new Error('Escolha um horário livre para sugerir.');
+            }
             const updates = { status: sugerirNovo ? 'aguardando_cliente' : 'rejeitado', motivoRejeicao: motivo };
             if (sugerirNovo) { updates.sugestaoNovaData = novaData; updates.sugestaoInicio = novaFaixaInicio; updates.sugestaoFim = novaFaixaFim; }
             await updateAppointmentSupabase(modal.ag.id, updates); await refetchAppointments(); setModal(null);
@@ -302,20 +356,24 @@ export default function AdminAgendamentos() {
                     <label className="text-[9px] font-bold uppercase tracking-[0.4em] text-zinc-500 block mb-3">Mensagem WhatsApp (editável)</label>
                     <textarea
                         value={mensagemWpp}
-                        onChange={e => setMensagemWpp(e.target.value)}
+                        onChange={e => { setMensagemWpp(e.target.value); setWhatsappConfirmed(false); }}
                         className="w-full bg-black border-b border-white/20 p-4 text-sm text-white font-modern focus:border-primary focus:outline-none h-32 resize-none mb-6 placeholder:text-zinc-700 transition-colors"
                     />
+                    <div className="mb-3 text-xs text-zinc-400">
+                        {whatsappOpened && <label className="flex items-center gap-3"><input type="checkbox" checked={whatsappConfirmed} onChange={e => setWhatsappConfirmed(e.target.checked)} /> Confirmo que enviei a mensagem no WhatsApp do cliente.</label>}
+                        {!whatsappOpened && <p>Primeiro abra o WhatsApp e envie a mensagem ao cliente.</p>}
+                    </div>
                     <div className="flex flex-col sm:flex-row gap-3 mt-8">
                         <a
                             href={gerarLinkWhatsAppCliente(getCliente(modal.ag)?.whatsapp || '', mensagemWpp)}
                             target="_blank"
                             rel="noopener noreferrer"
-
+                            onClick={() => setWhatsappOpened(true)}
                             className="flex-1 bg-[#25D366]/10 border border-[#25D366]/20 text-[#25D366] px-6 py-4 font-display font-bold uppercase text-[10px] tracking-[0.3em] flex items-center justify-center gap-3 hover:bg-[#25D366] hover:text-black transition-all"
                         >
                             <MessageCircle size={18} /> WhatsApp
                         </a>
-                        <button disabled={action.busy} onClick={confirmarAprovar} className="flex-1 bg-green-500 text-black py-4 font-display font-bold uppercase text-[10px] tracking-[0.3em] hover:bg-green-400 transition-colors">Confirmar Aprovação</button>
+                        <button disabled={action.busy || !whatsappConfirmed || !getCliente(modal.ag)?.whatsapp} onClick={confirmarAprovar} className="flex-1 bg-green-500 text-black py-4 font-display font-bold uppercase text-[10px] tracking-[0.3em] hover:bg-green-400 transition-colors">Confirmar Aprovação</button>
                     </div>
                 </ModalOverlay>
             )}
@@ -366,26 +424,38 @@ export default function AdminAgendamentos() {
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 p-6 border border-white/5 bg-black">
                             <div>
                                 <label className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 block mb-2">Nova Data</label>
-                                <input type="date" value={novaData} onChange={e => setNovaData(e.target.value)} className="w-full bg-transparent border-b border-white/20 py-2 text-sm text-white font-modern focus:border-primary focus:outline-none transition-colors" />
+                                <input type="date" value={novaData} min={new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })} onChange={e => setNovaData(e.target.value)} className="w-full bg-transparent border-b border-white/20 py-2 text-sm text-white font-modern focus:border-primary focus:outline-none transition-colors" />
                             </div>
                             <div>
                                 <label className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 block mb-2">Início</label>
-                                <input type="time" value={novaFaixaInicio} onChange={e => setNovaFaixaInicio(e.target.value)} className="w-full bg-transparent border-b border-white/20 py-2 text-sm text-white font-modern focus:border-primary focus:outline-none transition-colors" />
+                                <select aria-label="Início da sugestão" value={novaFaixaInicio} onChange={e => {
+                                    const chosen = proposalSlots.find(s => s.inicio === e.target.value);
+                                    setNovaFaixaInicio(chosen?.inicio || '');
+                                    setNovaFaixaFim(chosen?.fim || '');
+                                }} className="w-full bg-black border-b border-white/20 py-2 text-sm text-white font-modern focus:border-primary focus:outline-none transition-colors">
+                                    {proposalSlots.map(s => <option key={s.inicio} value={s.inicio}>{s.inicio}</option>)}
+                                </select>
                             </div>
                             <div>
                                 <label className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 block mb-2">Fim</label>
-                                <input type="time" value={novaFaixaFim} onChange={e => setNovaFaixaFim(e.target.value)} className="w-full bg-transparent border-b border-white/20 py-2 text-sm text-white font-modern focus:border-primary focus:outline-none transition-colors" />
+                                <input aria-label="Fim calculado" readOnly type="time" value={novaFaixaFim} className="w-full bg-transparent border-b border-white/20 py-2 text-sm text-primary font-modern" />
                             </div>
                         </div>
                     )}
+                    {sugerirNovo && <p className="mb-4 text-xs text-zinc-400">{proposalLoading ? 'Consultando horários livres...' : proposalSlots.length ? 'O fim é calculado automaticamente conforme a duração do serviço.' : 'Nenhum horário disponível na data selecionada.'}</p>}
+                    <div className="mb-3 text-xs text-zinc-400">
+                        {whatsappOpened && <label className="flex items-center gap-3"><input type="checkbox" checked={whatsappConfirmed} onChange={e => setWhatsappConfirmed(e.target.checked)} /> Confirmo que enviei a mensagem no WhatsApp do cliente.</label>}
+                        {!whatsappOpened && <p>Primeiro abra o WhatsApp e envie a mensagem ao cliente.</p>}
+                    </div>
                     <div className="flex gap-3">
-                        <button disabled={action.busy} onClick={confirmarRejeitar} className="flex-1 bg-red-500 text-white py-3 font-display font-bold uppercase text-xs tracking-[0.3em] hover:bg-red-400 transition-colors">
+                        <button disabled={action.busy || !whatsappConfirmed || !getCliente(modal.ag)?.whatsapp || (sugerirNovo && (!novaData || !novaFaixaFim))} onClick={confirmarRejeitar} className="flex-1 bg-red-500 text-white py-3 font-display font-bold uppercase text-xs tracking-[0.3em] hover:bg-red-400 transition-colors">
                             {sugerirNovo ? 'Enviar Proposta' : 'Confirmar Rejeição'}
                         </button>
                         <a
                             href={gerarLinkWhatsAppCliente(getCliente(modal.ag)?.whatsapp || '', mensagemWpp)}
                             target="_blank"
                             rel="noopener noreferrer"
+                            onClick={() => setWhatsappOpened(true)}
                             className="bg-[#25D366] text-white px-6 py-3 font-display font-bold uppercase text-xs tracking-[0.3em] flex items-center gap-2"
                         >
                             <MessageCircle size={16} />

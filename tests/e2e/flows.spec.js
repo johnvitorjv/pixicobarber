@@ -8,13 +8,13 @@ test.beforeEach(async ({page}) => {
     await page.route('**/*', route => ['127.0.0.1','localhost'].includes(new URL(route.request().url()).hostname) ? route.continue() : route.abort());
 });
 
-async function mockBackend(page, { admin = false, failBooking = false, failService = false, failLogout = false, flagged = false, chemical = false, failOverride = false, failConfirmation = false } = {}) {
+async function mockBackend(page, { admin = false, developer = false, failBooking = false, failService = false, failLogout = false, flagged = false, chemical = false, failOverride = false, failConfirmation = false } = {}) {
     const state = { mutations: [], apps: [], signedOut: false, failLogout, failConfirmation, config: {nomeNegocio:'PIXICO Barber',whatsappNumero:'5571994096863',endereco:'Salvador',blacklistBehavior:'approval'} };
     const payload = Buffer.from(JSON.stringify({sub:id,exp:Math.floor(Date.now()/1000)+3600,role:'authenticated'})).toString('base64url');
     state.accessToken = 'eyJhbGciOiJIUzI1NiJ9.'+payload+'.test-signature';
     const authUser = { id, email: 'teste@example.invalid', aud: 'authenticated', role: 'authenticated',
         user_metadata: { role: 'admin', nome: 'Metadados não confiáveis' } };
-    const profile = { id, nome: 'Cliente', sobrenome: 'Teste', role: admin ? 'admin' : 'client', whatsapp: '5571999990000', foto_url: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==', criado_em: '2026-01-01T12:00:00Z' };
+    const profile = { id, nome: 'Cliente', sobrenome: 'Teste', role: admin ? 'admin' : 'client', is_developer: developer, whatsapp: '5571999990000', foto_url: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==', criado_em: '2026-01-01T12:00:00Z' };
     const service = { id: serviceId, nome: 'Corte', descricao_curta: 'Corte de teste', preco: 60, duracao: 45,
         categoria: 'corte', status: 'ativo', ordem: 1, visivel_home: true, visivel_cliente: true, visivel_agendamento: true };
     if (chemical) Object.assign(service,{nome:typeof chemical==='string'?chemical:'Platinado',descricao_curta:'Químico de teste',preco:chemical==='Luzes'?80:100,duracao:null,confirmacao_manual:true,aplicacao_minutos:15});
@@ -53,6 +53,21 @@ async function mockBackend(page, { admin = false, failBooking = false, failServi
         }
         else if (path.endsWith('/get_available_slots')) response = [{id:'09:00',inicio:'09:00',fim:chemical?null:'09:45',disponivel:true}];
         else if (path.endsWith('/get_admin_appointments')) response = state.apps;
+        else if (path.endsWith('/get_edit_slots')) response = [
+            {id:'09:30',inicio:'09:30',fim:'10:15',disponivel:true},
+            {id:'10:00',inicio:'10:00',fim:'10:45',disponivel:false}
+        ];
+        else if (path.endsWith('/client_change_appointment')) {
+            const body = req.postDataJSON();
+            const old = state.apps.find(a => a.id === body.p_appointment);
+            if (!old) {status=404;response={code:'P0001',message:'Agendamento não encontrado.'};}
+            else {
+                old.status='cancelado_cliente';
+                const newId='77777777-7777-4777-8777-777777777777';
+                state.apps.push({...old,id:newId,servico_id:body.p_service,data:body.p_date,faixa_inicio:body.p_start,faixa_fim:'10:15',status:'pendente'});
+                response=newId;
+            }
+        }
         else if (path.endsWith('/appointments')) {
             if (method === 'POST') {
                 if (failBooking) { status = 409; response = {code:'23P01',message:'conflict'}; }
@@ -74,6 +89,12 @@ async function login(page) {
     await page.locator('input[name=senha]').fill('LocalTest123!');
     await page.getByRole('button',{name:'Entrar',exact:true}).click();
 }
+async function acknowledgeAdminWhatsApp(page) {
+    const dialog = page.getByRole('dialog');
+    await dialog.getByRole('link',{name:'WhatsApp',exact:true}).dispatchEvent('click');
+    await dialog.getByRole('checkbox',{name:/Confirmo que enviei/}).check();
+}
+
 async function chooseBooking(page) {
     await page.goto('/agendar');
     await page.getByRole('button',{name:/Corte de teste/}).click();
@@ -81,6 +102,41 @@ async function chooseBooking(page) {
     await page.getByRole('button',{name:String(tomorrow.getDate()),exact:true}).click();
     await page.getByRole('button',{name:'09:00 — 09:45',exact:true}).click();
 }
+
+test('regular client sees a seven-day booking horizon', async ({page}) => {
+    await mockBackend(page);
+    await login(page); await expect(page).toHaveURL(/\/painel$/);
+    await page.goto('/agendar');
+    await page.getByRole('button',{name:/Corte de teste/}).click();
+    const start = new Date(bahiaDate() + 'T12:00:00');
+    const end = new Date(start); end.setDate(end.getDate() + 7);
+    const visibleEnd = bahiaDate(end).split('-').reverse().join('/');
+    await expect(page.getByText(`Agenda móvel: escolha um dia até ${visibleEnd}. Novos dias abrem automaticamente.`)).toBeVisible();
+    const nextMonth = page.locator('button:has(svg.lucide-chevron-right)').last();
+    if (start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear()) {
+        await expect(nextMonth).toBeDisabled();
+        const afterEnd = new Date(end); afterEnd.setDate(afterEnd.getDate() + 1);
+        if (afterEnd.getMonth() === end.getMonth()) {
+            await expect(page.getByRole('button',{name:String(afterEnd.getDate()),exact:true})).toHaveCount(0);
+        }
+    } else {
+        await expect(nextMonth).toBeEnabled();
+    }
+});
+
+test('developer client can navigate past the seven-day horizon', async ({page}) => {
+    await mockBackend(page,{developer:true});
+    await login(page); await expect(page).toHaveURL(/\/painel$/);
+    await page.goto('/agendar');
+    await page.getByRole('button',{name:/Corte de teste/}).click();
+    await expect(page.getByText('Acesso de desenvolvedor: escolha qualquer dia disponível.')).toBeVisible();
+    const nextMonth = page.locator('button:has(svg.lucide-chevron-right)').last();
+    await expect(nextMonth).toBeEnabled();
+    await nextMonth.click();
+    const newMonth = new Date(bahiaDate() + 'T12:00:00'); newMonth.setMonth(newMonth.getMonth() + 1);
+    const months = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+    await expect(page.getByText(`${months[newMonth.getMonth()]} ${newMonth.getFullYear()}`)).toBeVisible();
+});
 
 for (const chemical of ['Platinado','Luzes']) test(`${chemical} request has variable duration, null end and no reservation guarantee`,async({page})=>{
     const state=await mockBackend(page,{chemical}); await login(page); await expect(page).toHaveURL(/\/painel$/);
@@ -111,6 +167,7 @@ for (const chemical of ['Platinado','Luzes']) test(`admin validates and confirms
     await expect(page.getByRole('button',{name:'Fechar diálogo'})).toBeInViewport();
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
     await expect(page.getByText(/incluindo processamento e lavagem/)).toBeVisible();
+    await acknowledgeAdminWhatsApp(page);
     await page.getByLabel('Fim ocupado').fill('09:15');
     await page.getByRole('button',{name:'Confirmar Aprovação'}).click();
     await expect(page.getByRole('dialog').getByRole('alert')).toContainText('30 a 480 minutos');
@@ -147,6 +204,7 @@ test('chemical confirmation conflict preserves full occupation and permits a del
     const state=await mockBackend(page,{admin:true,flagged:true,chemical:'Luzes',failConfirmation:true});
     await login(page);await expect(page).toHaveURL(/\/admin$/);await page.goto('/admin/agendamentos');
     await page.getByRole('button',{name:'Aprovar',exact:true}).click();
+    await acknowledgeAdminWhatsApp(page);
     await page.getByLabel('Fim ocupado').fill('12:00');
     await page.getByRole('button',{name:'Confirmar Aprovação'}).click();
     await expect(page.getByRole('dialog').getByRole('alert')).toContainText('Escolha outro');
@@ -224,6 +282,23 @@ test('booking uses server duration and prevents repeated submit; history reflect
     await expect(page.getByRole('status').filter({hasText:'Agendamento cancelado'})).toBeVisible();
     expect(state.apps[0].status).toBe('cancelado_cliente');
 });
+test('client changes booking to a free slot before the service date',async ({page}) => {
+    const state=await mockBackend(page,{flagged:true});
+    await login(page);
+    await expect(page).toHaveURL(/\/painel$/);
+    await page.getByRole('button',{name:'Alterar',exact:true}).click();
+    const dialog=page.getByRole('dialog',{name:'Alterar agendamento'});
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText('até o dia anterior',{exact:false})).toBeVisible();
+    await dialog.getByRole('button',{name:'09:30–10:15'}).click();
+    await dialog.getByRole('button',{name:'Solicitar alteração'}).click();
+    await expect(dialog).toHaveCount(0);
+    const changes=state.mutations.filter(m=>m.path.endsWith('/client_change_appointment'));
+    expect(changes).toHaveLength(1);
+    expect(changes[0].body).toMatchObject({p_date:day,p_start:'09:30',p_service:serviceId});
+    await expect(page.getByText('Pendente',{exact:true}).first()).toBeVisible();
+});
+
 test('booking conflict remains on confirmation and offers clear recovery',async ({page}) => {
     await mockBackend(page,{failBooking:true}); await login(page); await expect(page).toHaveURL(/\/painel$/);
     await chooseBooking(page); await page.getByRole('button',{name:'Confirmar Solicitação'}).click();

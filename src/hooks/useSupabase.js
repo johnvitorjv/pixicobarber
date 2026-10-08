@@ -85,7 +85,7 @@ export function useSupabaseClients() {
     const state = useRows('profiles');
     const clients = state.rows.filter(p => p.role !== 'admin').map(p => ({
         id: p.id, nome: p.nome || '', sobrenome: p.sobrenome || '', email: p.email || '',
-        whatsapp: p.whatsapp || '', fotoUrl: p.foto_url || '', role: p.role,
+        whatsapp: p.whatsapp || '', fotoUrl: p.foto_url || '', role: p.role, isDeveloper: p.is_developer === true,
         nascimento: p.nascimento || '', observacoesAdmin: p.observacoes_admin || '',
         ultimaAtividade: p.ultima_atividade || p.criado_em, criadoEm: p.criado_em,
         favorito: p.favorito || false, blacklist: p.blacklist || false,

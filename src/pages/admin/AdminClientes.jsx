@@ -12,12 +12,19 @@ import {
 
 function formatData(d) { if (!d) return '—'; try { return new Date(d.length === 10 ? d + 'T12:00:00' : d).toLocaleDateString('pt-BR'); } catch { return d; } }
 
+function presenceScore(appointments) {
+    const attended = appointments.filter(a => a.status === 'concluido').length;
+    const missed = appointments.filter(a => a.status === 'ausente').length;
+    return attended + missed > 0 ? Math.round(attended * 100 / (attended + missed)) : null;
+}
+
 export default function AdminClientes() {
     useStoreSync();
     const action = useAction();
     const [busca, setBusca] = useState('');
     const [filtro, setFiltro] = useState('todos');
     const [modal, setModal] = useState(null);
+    const [photoPreview, setPhotoPreview] = useState(null);
 
     // Edit state
     const [editApelido, setEditApelido] = useState('');
@@ -131,7 +138,7 @@ export default function AdminClientes() {
                             <div key={c.id} className={`bg-black aspect-[3/4] flex flex-col justify-between p-6 border transition-all hover:-translate-y-1 group ${c.blacklist ? 'border-red-500/20 hover:border-red-500/40 backdrop-blur-md' : c.favorito ? 'border-primary/20 hover:border-primary/40' : 'border-white/5 hover:border-white/20'}`}>
                                 <div>
                                     <div className="flex items-start justify-between mb-6">
-                                        <Avatar src={c.fotoUrl} initials={`${c.nome?.[0] || ''}${c.sobrenome?.[0] || ''}`} size="md" className="ring-1 ring-white/10 group-hover:ring-primary/30 grayscale group-hover:grayscale-0 transition-all duration-500" />
+                                        <button title="Ampliar foto" type="button" onClick={() => setPhotoPreview(c)} className="cursor-zoom-in"><Avatar src={c.fotoUrl} initials={`${c.nome?.[0] || ''}${c.sobrenome?.[0] || ''}`} size="md" className="ring-1 ring-white/10 group-hover:ring-primary/30 grayscale group-hover:grayscale-0 transition-all duration-500" /></button>
                                         <div className="flex gap-1 bg-white/[0.02] border border-white/5 p-1">
                                             <button onClick={() => toggleFav(c.id)} className={`p-1.5 transition-colors ${c.favorito ? 'text-primary' : 'text-zinc-600 hover:text-primary'}`}>
                                                 <Star size={14} className={c.favorito ? 'fill-primary' : ''} />
@@ -151,7 +158,7 @@ export default function AdminClientes() {
                                             <span className="text-[8px] text-zinc-600">Presenças</span>
                                         </div>
                                         <div className="flex flex-col border-l border-white/5 pl-2">
-                                            <span className="text-white text-lg font-display tabular-nums mb-0.5">{c.scorePresenca || 100}%</span>
+                                            <span className="text-white text-lg font-display tabular-nums mb-0.5">{presenceScore(clientApps) ?? '—'}{presenceScore(clientApps) == null ? '' : '%'}</span>
                                             <span className="text-[8px] text-zinc-600">Score</span>
                                         </div>
                                     </div>
@@ -206,7 +213,7 @@ export default function AdminClientes() {
                 const topServicos = Object.entries(servicoCount).sort((a, b) => b[1] - a[1]).slice(0, 3);
 
                 // Score de presença
-                const score = totalAgs > 0 ? Math.round(((concluidosCount) / Math.max(1, concluidosCount + faltasCount)) * 100) : 100;
+                const score = presenceScore(clientApps);
 
                 return (
                     <ModalOverlay onClose={() => setModal(null)}><DataState error={action.error} loading={action.busy} />
@@ -216,7 +223,7 @@ export default function AdminClientes() {
                                 {/* Foto ampliada */}
                                 <div className="relative mb-6">
                                     {c.fotoUrl ? (
-                                        <img src={c.fotoUrl} alt={c.nome} className="w-32 h-32 rounded-full object-cover ring-2 ring-primary/20 shadow-2xl shadow-primary/10" />
+                                        <button title="Ampliar fotografia" onClick={() => setPhotoPreview(c)} type="button"><img src={c.fotoUrl} alt={c.nome} className="w-32 h-32 rounded-full object-cover ring-2 ring-primary/20 shadow-2xl shadow-primary/10 cursor-zoom-in" /></button>
                                     ) : (
                                         <div className="w-32 h-32 rounded-full bg-zinc-900 border border-white/10 flex items-center justify-center">
                                             <span className="font-display font-bold text-3xl text-zinc-500 tracking-widest">{(c.nome?.[0] || '')}{(c.sobrenome?.[0] || '')}</span>
@@ -233,8 +240,8 @@ export default function AdminClientes() {
                                 <h3 className="font-display font-bold text-3xl uppercase tracking-tighter mb-1">{c.nome} {c.sobrenome}</h3>
                                 {c.apelido && <span className="text-primary text-sm font-modern italic tracking-wide">"{c.apelido}"</span>}
                                 <div className="flex items-center gap-3 mt-4">
-                                    <span className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 border ${score >= 80 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : score >= 50 ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
-                                        Score: {score}%
+                                    <span className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 border ${score == null ? 'bg-zinc-800/30 text-zinc-400 border-white/10' : score >= 80 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : score >= 50 ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
+                                        Score: {score == null ? 'Sem histórico' : `${score}%`}
                                     </span>
                                     {c.favorito && <span className="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 bg-primary/10 text-primary border border-primary/20">⭐ Favorito</span>}
                                     {c.blacklist && <span className="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 bg-red-500/10 text-red-400 border border-red-500/20">🚫 Blacklist</span>}
@@ -395,6 +402,12 @@ export default function AdminClientes() {
                     <textarea value={blMotivo} onChange={e => setBlMotivo(e.target.value)} placeholder="Descreva o motivo da restrição..." className="w-full bg-black border-b border-white/20 p-4 text-sm text-white font-modern focus:border-red-500 focus:outline-none h-32 resize-none mb-6 placeholder:text-zinc-600 transition-colors" />
                     <button disabled={action.busy} onClick={confirmarBlacklist} className="w-full bg-red-600 hover:bg-red-500 text-white py-4 font-display font-bold uppercase text-xs tracking-[0.3em] transition-colors">Confirmar Bloqueio</button>
                 </ModalOverlay>
+            )}
+            {photoPreview?.fotoUrl && (
+                <div className="fixed inset-0 z-[150] bg-black/95 flex items-center justify-center p-6" onClick={() => setPhotoPreview(null)}>
+                    <button type="button" onClick={() => setPhotoPreview(null)} aria-label="Fechar fotografia" className="absolute top-5 right-6 text-white text-3xl">×</button>
+                    <img src={photoPreview.fotoUrl} alt={photoPreview.nome} className="max-w-full max-h-[85vh] object-contain rounded-lg" onClick={e => e.stopPropagation()} />
+                </div>
             )}
         </div>
     );

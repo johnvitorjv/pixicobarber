@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/auth';
 import notificationStore from '../stores/notificationStore';
@@ -8,11 +9,14 @@ import { useStoreSync } from '../hooks/useStore';
 import { useSupabaseAppointments, updateAppointmentSupabase, updateProfileSupabase } from '../hooks/useSupabase';
 import { Avatar } from '../components/PhotoUpload';
 import PhotoUpload from '../components/PhotoUpload';
+import ClientEditBooking from '../components/ClientEditBooking';
+import { editableUntilPreviousDay } from '../lib/bookingWindow';
 import { Calendar, Plus, User, LogOut, Clock, ArrowUpRight, Bell } from 'lucide-react';
 
 export default function DashboardPage() {
     const { user, logout, refreshUser } = useAuth();
     const navigate = useNavigate();
+    const [editing, setEditing] = useState(null);
     useStoreSync();
     const action = useAction();
     const { appointments: sbApps, loading, error, refetch } = useSupabaseAppointments();
@@ -123,7 +127,7 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Próximos Agendamentos */}
-                <div className="mb-20">
+                <div id="meus-agendamentos" className="mb-20 scroll-mt-28">
                     <h2 className="font-display font-bold text-xl sm:text-2xl uppercase tracking-tighter mb-8 flex items-center gap-4 text-white">
                         <div className="w-1 h-5 bg-primary" /> Próximos Agendamentos
                     </h2>
@@ -157,6 +161,7 @@ export default function DashboardPage() {
                                             <span className={`px-4 py-2 border text-[10px] font-bold uppercase tracking-widest ${status.cor} ${status.bord}`}>
                                                 {status.label}
                                             </span>
+                                            {editableUntilPreviousDay(ag) && <button disabled={action.busy} onClick={() => setEditing(ag)} className="text-primary text-xs font-bold">Alterar</button>}
                                             {ag.status === 'aguardando_cliente' && ag.sugestaoNovaData && <button disabled={action.busy} onClick={() => aceitarProposta(ag.id)} className="text-primary text-xs">Aceitar {formatData(ag.sugestaoNovaData)} {ag.sugestaoNovaFaixa}</button>}
                                             {['solicitado', 'pendente','confirmado','remarcado','aguardando_cliente'].includes(ag.status) && (
                                                 <button disabled={action.busy} onClick={() => cancelarAgendamento(ag.id)}
@@ -243,6 +248,7 @@ export default function DashboardPage() {
                     </div>
                 </div>
             </div>
+            {editing && <ClientEditBooking appointment={editing} user={user} onClose={() => setEditing(null)} onSaved={async () => { setEditing(null); await refetch(); }} />}
         </div>
     );
 }

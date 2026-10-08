@@ -9,6 +9,7 @@ import { createAppointmentSupabase, useSupabaseServices } from '../hooks/useSupa
 import { useSlots } from '../hooks/useSlots';
 import { bahiaDate, calendarDate, mutationMessage, serviceAllowedOnDate, serviceDurationLabel } from '../lib/bookingRules';
 import { groupServices } from '../lib/serviceGroups';
+import { bookingWindow } from '../lib/bookingWindow';
 import DataState from '../components/DataState';
 import { useStoreSync } from '../hooks/useStore';
 import { ArrowLeft, Lock, Check, ChevronLeft, ChevronRight, MessageCircle, ArrowUpRight } from 'lucide-react';
@@ -27,7 +28,8 @@ export default function BookingPage() {
     const [mesAtual, setMesAtual] = useState(new Date(bahiaDate() + 'T12:00:00'));
 
     useStoreSync();
-    const disponibilidade = availabilityStore.getRange(60);
+    const windowLimit = bookingWindow(user);
+    const disponibilidade = availabilityStore.getRange(10);
 
     // Dados persistidos exclusivamente pelo Supabase.
     const { loading: sbServicesLoading, error: servicesError, refetch: refetchServices, getById: sbGetById, getVisiveis: sbGetVisiveis } = useSupabaseServices();
@@ -89,15 +91,16 @@ export default function BookingPage() {
             const data = new Date(ano, mes, d);
             const chave = calendarDate(data);
             const passado = chave < bahiaDate();
-            const info = disponibilidade[chave];
+            const info = disponibilidade[chave] || (windowLimit.unrestricted ? availabilityStore.getDay(chave) : null);
+            const foraDoPrazo = !windowLimit.unrestricted && chave > windowLimit.end;
 
             dias.push({
                 dia: d,
                 data: chave,
                 passado,
-                disponivel: !passado && info?.disponivel === true && serviceAllowedOnDate(servicoSelecionado,chave),
-                fechado: !info?.disponivel || !serviceAllowedOnDate(servicoSelecionado,chave),
-                motivo: info?.motivo || '',
+                disponivel: !passado && !foraDoPrazo && info?.disponivel === true && serviceAllowedOnDate(servicoSelecionado,chave),
+                fechado: foraDoPrazo || !info?.disponivel || !serviceAllowedOnDate(servicoSelecionado,chave),
+                motivo: foraDoPrazo ? 'Agenda aberta apenas até 7 dias' : (info?.motivo || ''),
             });
         }
 
@@ -108,6 +111,7 @@ export default function BookingPage() {
         if (submitting.current) return;
         const selected = slots.find(f => f.id === faixaSelecionada && f.disponivel);
         if (!selected || !servicoSelecionado || slotsLoading) { setError('Verifique o horário e tente novamente.'); return; }
+        if (!windowLimit.unrestricted && dataSelecionada > windowLimit.end) { setError('Escolha um dia dentro dos próximos 7 dias.'); return; }
         submitting.current = true; setConfirming(true); setError('');
         try {
             await createAppointmentSupabase({
@@ -225,6 +229,7 @@ export default function BookingPage() {
                         <div className="mb-12">
                             <span className="text-[10px] font-bold uppercase tracking-[1em] text-primary mb-3 block">Passo 2</span>
                             <h2 className="font-display font-bold text-3xl md:text-5xl uppercase tracking-tighter mb-4">Escolha a Data</h2>
+                            <p className="font-modern text-zinc-400 text-sm">{windowLimit.unrestricted ? 'Acesso de desenvolvedor: escolha qualquer dia disponível.' : `Agenda móvel: escolha um dia até ${windowLimit.end.split('-').reverse().join('/')}. Novos dias abrem automaticamente.`}</p>
                         </div>
 
                         <div className="bg-black border border-white/5 p-6 md:p-10">
@@ -240,13 +245,13 @@ export default function BookingPage() {
 
                             {/* Navegação de mês */}
                             <div className="flex items-center justify-between mb-8">
-                                <button onClick={() => setMesAtual(new Date(mesAtual.getFullYear(), mesAtual.getMonth() - 1))} className="w-12 h-12 flex items-center justify-center border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] text-white transition-colors">
+                                <button disabled={`${mesAtual.getFullYear()}-${String(mesAtual.getMonth()+1).padStart(2,'0')}` <= windowLimit.start.slice(0,7)} onClick={() => setMesAtual(new Date(mesAtual.getFullYear(), mesAtual.getMonth() - 1))} className="disabled:opacity-25 disabled:cursor-not-allowed w-12 h-12 flex items-center justify-center border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] text-white transition-colors">
                                     <ChevronLeft size={20} />
                                 </button>
                                 <span className="font-display font-bold uppercase tracking-[0.3em] text-lg text-white">
                                     {MESES[mesAtual.getMonth()]} {mesAtual.getFullYear()}
                                 </span>
-                                <button onClick={() => setMesAtual(new Date(mesAtual.getFullYear(), mesAtual.getMonth() + 1))} className="w-12 h-12 flex items-center justify-center border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] text-white transition-colors">
+                                <button disabled={!windowLimit.unrestricted && `${mesAtual.getFullYear()}-${String(mesAtual.getMonth()+1).padStart(2,'0')}` >= windowLimit.end.slice(0,7)} onClick={() => setMesAtual(new Date(mesAtual.getFullYear(), mesAtual.getMonth() + 1))} className="disabled:opacity-25 disabled:cursor-not-allowed w-12 h-12 flex items-center justify-center border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] text-white transition-colors">
                                     <ChevronRight size={20} />
                                 </button>
                             </div>

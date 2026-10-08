@@ -15,7 +15,11 @@ test('production PWA uses an informative offline page, preserving foreign caches
     expect(keys).toContain('unrelated-app-cache'); expect(keys).not.toContain('pixico-static-v1');
     expect(keys.filter(k=>k.startsWith('pixico-static-'))).toHaveLength(1);
     await page.reload();
-    await expect(page.getByRole('alert').filter({hasText:'configuração de acesso ausente'})).toContainText('configuração de acesso ausente');
+    await page.goto('/login');
+    await page.locator('input[name="email"]').fill('pwa-test@example.invalid');
+    await page.locator('input[name="senha"]').fill('PwaTest123!');
+    await page.getByRole('button', {name:'Entrar',exact:true}).click();
+    await expect(page.getByText('Acesso indisponível no momento.')).toBeVisible();
     await page.evaluate(async () => {
         await fetch('/private-test', { headers: { Authorization: 'Bearer mock-test-only' } });
         await fetch('/login');
