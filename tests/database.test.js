@@ -27,6 +27,7 @@ before(async () => {
     await db.exec(bootstrapSQL);
     await db.exec(await readFile(new URL('../supabase/schema.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../supabase/migrations/202610010001_production_foundation.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../supabase/migrations/202610080007_rls_and_fk_performance.sql', import.meta.url), 'utf8'));
     seededConfig = (await db.query('select data from public.schedule_config')).rows[0].data;
     seededBusiness = (await db.query('select data from public.business_settings')).rows[0].data;
     seededCatalog = (await db.query('select * from public.services')).rows;
