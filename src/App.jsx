@@ -52,7 +52,7 @@ function useMobileCenterActive(ref) {
 
 const IMAGES = {
   hero: "/hero_bg.png",
-  sobre: "/pixico_owner_about.png",
+  sobre: "/pixico_owner_about_20261008.jpg",
   galeria: [
     "/galeria/1.jpg",
     "/galeria/2.jpg",
