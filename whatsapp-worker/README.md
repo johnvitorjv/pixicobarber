@@ -3,6 +3,7 @@
 - VM Ubuntu 24.04 x86_64, Oracle 1 GB / 2 GB swap; Node 22+, Baileys.
 - Fila privada no Supabase, distinta dos e-mails. Não há envios retroativos.
 - Opt-in independente do cliente e do barbeiro. Telefone de cadastro não significa consentimento.
+- Revogação do cliente cancela notificações pendentes e tarefas em execução; o servidor revalida consentimento imediatamente antes de enviar. Esse cuidado está na migração 202610090003_whatsapp_revocation.sql.
 - Bot não recebe tarefas sem chave aleatória forte e sem o modo de produção.
 
 ## Próximas etapas APÓS receber e autorizar o número secundário

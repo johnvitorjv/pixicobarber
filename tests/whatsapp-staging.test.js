@@ -11,7 +11,8 @@ const SECRET='locally-generated-test-token-never-use-this-in-production-01234567
 const migrations=[
   '202610010001_production_foundation.sql',
   '202610080004_booking_window_client_changes.sql',
-  '202610090002_whatsapp_staging.sql'
+  '202610090002_whatsapp_staging.sql',
+  '202610090003_whatsapp_revocation.sql'
 ];
 
 test('WhatsApp staging: disabled, explicit opt-in, separate outbox, lease',async()=>{
@@ -66,6 +67,10 @@ test('WhatsApp staging: disabled, explicit opt-in, separate outbox, lease',async
     const claim=await db.query('select * from public.whatsapp_worker_claim($1,1)',[SECRET]);
     assert.equal(claim.rows.length,1);
     assert.ok(claim.rows[0].lease_token);
+    const initiallyAllowed=await db.query('select public.whatsapp_worker_validate($1,$2,$3) as ok',[
+      SECRET,claim.rows[0].id,claim.rows[0].lease_token
+    ]);
+    assert.equal(initiallyAllowed.rows[0].ok,true);
     const ack=await db.query('select public.whatsapp_worker_ack($1,$2,$3,true,null) as ok',[
       SECRET,claim.rows[0].id,claim.rows[0].lease_token
     ]);
@@ -74,6 +79,23 @@ test('WhatsApp staging: disabled, explicit opt-in, separate outbox, lease',async
       SECRET,claim.rows[0].id,claim.rows[0].lease_token
     ]);
     assert.equal(again.rows[0].ok,false,'cannot acknowledge twice');
+    const batch=await db.query('select * from public.whatsapp_worker_claim($1,5)',[SECRET]);
+    const clientClaim=batch.rows.find(j=>j.recipient_phone==='5571999999999');
+    assert.ok(clientClaim,'a client message available to verify revocation');
+    const checked=await db.query('select public.whatsapp_worker_validate($1,$2,$3) as ok',[
+      SECRET,clientClaim.id,clientClaim.lease_token
+    ]);
+    assert.equal(checked.rows[0].ok,true);
+    await db.query("update public.profiles set whatsapp_opt_in=false where id=$1",[CUSTOMER]);
+    const revoked=await db.query('select public.whatsapp_worker_validate($1,$2,$3) as ok',[
+      SECRET,clientClaim.id,clientClaim.lease_token
+    ]);
+    assert.equal(revoked.rows[0].ok,false,'must fail to send after unsubscribe');
+    assert.equal((await db.query('select status from private.whatsapp_outbox where id=$1',[clientClaim.id])).rows[0].status,'cancelled');
+    assert.equal((await db.query('select public.whatsapp_worker_ack($1,$2,$3,true,null) as ok',[
+      SECRET,clientClaim.id,clientClaim.lease_token
+    ])).rows[0].ok,false,'revoked lease cannot be acknowledged');
+    assert.equal((await db.query("select count(*)::int as n from private.whatsapp_outbox where recipient_kind='client' and status in ('pending','failed','sending')")).rows[0].n,0);
     await assert.rejects(db.query('select * from public.whatsapp_worker_claim($1,1)',['incorrect']),/não autorizado/);
   } finally { await db.close(); }
 });

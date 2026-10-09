@@ -65,6 +65,13 @@ async function processJobs() {
           throw new Error('Incomplete queue record');
         }
         if (!alreadySent.has(job.id)) {
+          const consent = await bridgeCall({action:'validate',id:job.id,lease:job.lease_token});
+          if (consent.allowed !== true) {
+            // Consent withdrawn, phone updated, or claim expired; never send.
+            // Let the server cancel the lease; do not retry an invalid recipient.
+            console.warn('Skipping revoked or expired WhatsApp job.');
+            continue;
+          }
           const jid=validPhone(job.recipient_phone);
           const sent=await socket.sendMessage(jid,{text:String(job.body).slice(0,3800)});
           if (!sent?.key?.id) throw new Error('WhatsApp did not confirm submission');

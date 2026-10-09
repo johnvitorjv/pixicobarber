@@ -41,6 +41,20 @@ Deno.serve(async (request: Request) => {
     if (error) return reply(error.code === "42501" ? 401 : 503, { error: "Worker unavailable" });
     return reply(200, { jobs: rows || [] });
   }
+  if (data.action === "validate") {
+    const id = typeof data.id === "string" ? data.id : "";
+    const lease = typeof data.lease === "string" ? data.lease : "";
+    if (!/^[0-9a-f-]{36}$/i.test(id) || !/^[0-9a-f-]{36}$/i.test(lease)) {
+      return reply(400, { error: "Invalid lease" });
+    }
+    const { data: allowed, error } = await admin.rpc("whatsapp_worker_validate", {
+      p_token: token,
+      p_id: id,
+      p_lease: lease,
+    });
+    if (error) return reply(error.code === "42501" ? 401 : 503, { error: "Unable to validate consent" });
+    return reply(200, { allowed: allowed === true });
+  }
   if (data.action === "ack") {
     const id = typeof data.id === "string" ? data.id : "";
     const lease = typeof data.lease === "string" ? data.lease : "";
