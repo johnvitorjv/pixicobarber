@@ -38,6 +38,7 @@ test('new booking-window and suggestion migrations install, enforce horizon, and
       '202610010001_production_foundation.sql',
       '202610080004_booking_window_client_changes.sql',
       '202610080005_suggestion_slots.sql',
+      '202610090001_month_availability.sql',
     ]) await db.exec(await readFile(new URL('../supabase/migrations/' + file, import.meta.url), 'utf8'));
     await db.query("insert into auth.users(id,email,raw_user_meta_data) values($1,'alice@example.invalid','{}'),($2,'bob@example.invalid','{}')", [user,other]);
     await db.query("insert into public.services(id,nome,preco,duracao,categoria,dias_permitidos) values($1,'Teste 45m',60,45,'corte',array[0,1,2,3,4,5,6])", [service]);
@@ -50,6 +51,9 @@ test('new booking-window and suggestion migrations install, enforce horizon, and
     await assert.rejects(asUser(db,other,()=>db.query("select public.client_change_appointment($1,$2,$3,'10:00')",[original,service,day3])),/não encontrado/);
     const available = await asUser(db,user,()=>db.query("select * from public.get_edit_slots($1,$2,$3)",[original,day3,service]));
     assert.ok(available.rows.some(r=>r.inicio==='10:00'&&r.disponivel===true));
+    const month = await asUser(db,user,()=>db.query("select day::text as day, available from public.get_month_availability(date_trunc('month',$1::date)::date,'edit',$2,$3)",[day3,service,original]));
+    assert.ok(month.rows.some(r=>r.day===day3 && r.available));
+    await assert.rejects(asUser(db,user,()=>db.query("select * from public.get_month_availability(date_trunc('month',$1::date)::date,'suggestion',null,$2)",[day3,original])),/administrativo/);
     const changed = await asUser(db,user,()=>db.query("select public.client_change_appointment($1,$2,$3,'10:00') as id",[original,service,day3]));
     assert.ok(changed.rows[0].id);
     assert.equal((await db.query('select status from public.appointments where id=$1',[original])).rows[0].status,'cancelado_cliente');

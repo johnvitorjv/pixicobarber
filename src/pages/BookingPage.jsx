@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { gerarLinkWhatsApp } from '../data/whatsappTemplates';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/auth';
@@ -9,7 +9,8 @@ import { createAppointmentSupabase, useSupabaseServices } from '../hooks/useSupa
 import { useSlots } from '../hooks/useSlots';
 import { bahiaDate, calendarDate, mutationMessage, serviceAllowedOnDate, serviceDurationLabel } from '../lib/bookingRules';
 import { groupServices } from '../lib/serviceGroups';
-import { bookingWindow } from '../lib/bookingWindow';
+import { addCalendarDays, bookingWindow } from '../lib/bookingWindow';
+import { requireSupabase } from '../lib/supabase';
 import DataState from '../components/DataState';
 import { useStoreSync } from '../hooks/useStore';
 import { ArrowLeft, Lock, Check, ChevronLeft, ChevronRight, MessageCircle, ArrowUpRight } from 'lucide-react';
@@ -26,6 +27,10 @@ export default function BookingPage() {
     const [faixaSelecionada, setFaixaSelecionada] = useState(null);
     const [observacao, setObservacao] = useState('');
     const [mesAtual, setMesAtual] = useState(new Date(bahiaDate() + 'T12:00:00'));
+    const [monthAvailable, setMonthAvailable] = useState({});
+    const [monthLoading, setMonthLoading] = useState(false);
+    const [monthError, setMonthError] = useState('');
+    const [monthRefresh, setMonthRefresh] = useState(0);
 
     useStoreSync();
     const windowLimit = bookingWindow(user);
@@ -42,6 +47,31 @@ export default function BookingPage() {
     const [confirming, setConfirming] = useState(false);
     const [error, setError] = useState('');
     const submitting = useRef(false);
+    const calendarEnd = windowLimit.unrestricted ? addCalendarDays(bahiaDate(), 59) : windowLimit.end;
+    const visibleMonth = `${mesAtual.getFullYear()}-${String(mesAtual.getMonth() + 1).padStart(2, '0')}-01`;
+
+    useEffect(() => {
+        if (!isAuthenticated || !servicoId || step !== 2) return undefined;
+        let active = true;
+        queueMicrotask(() => { if (active) { setMonthLoading(true); setMonthError(''); } });
+        requireSupabase().rpc('get_month_availability', {
+            p_month: visibleMonth, p_mode: 'booking', p_service: servicoId,
+            p_appointment: null
+        }).then(({ data, error: requestError }) => {
+            if (!active) return;
+            setMonthAvailable(requestError ? {} : Object.fromEntries((data || []).map(row => [row.day, row.available])));
+            setMonthLoading(false);
+            if (requestError) setMonthError(mutationMessage(requestError));
+        }).catch(err => { if (active) { setMonthAvailable({}); setMonthLoading(false); setMonthError(mutationMessage(err)); } });
+        return () => { active = false; };
+    }, [isAuthenticated, step, servicoId, visibleMonth, monthRefresh]);
+
+    useEffect(() => {
+        const refresh = () => setMonthRefresh(x => x + 1);
+        const timer = setInterval(() => { if (step === 2) refresh(); }, 30000);
+        window.addEventListener('focus', refresh);
+        return () => { clearInterval(timer); window.removeEventListener('focus', refresh); };
+    }, [step]);
 
     // Redirecionar para login se não autenticado
     if (!isAuthenticated) {
@@ -92,14 +122,14 @@ export default function BookingPage() {
             const chave = calendarDate(data);
             const passado = chave < bahiaDate();
             const info = disponibilidade[chave] || (windowLimit.unrestricted ? availabilityStore.getDay(chave) : null);
-            const foraDoPrazo = !windowLimit.unrestricted && chave > windowLimit.end;
+            const foraDoPrazo = chave > calendarEnd;
 
             dias.push({
                 dia: d,
                 data: chave,
                 passado,
-                disponivel: !passado && !foraDoPrazo && info?.disponivel === true && serviceAllowedOnDate(servicoSelecionado,chave),
-                fechado: foraDoPrazo || !info?.disponivel || !serviceAllowedOnDate(servicoSelecionado,chave),
+                disponivel: !passado && !foraDoPrazo && monthAvailable[chave] === true && info?.disponivel === true && serviceAllowedOnDate(servicoSelecionado,chave),
+                fechado: foraDoPrazo || monthAvailable[chave] !== true || !info?.disponivel || !serviceAllowedOnDate(servicoSelecionado,chave),
                 motivo: foraDoPrazo ? 'Agenda aberta apenas até 7 dias' : (info?.motivo || ''),
             });
         }
@@ -251,18 +281,20 @@ export default function BookingPage() {
                                 <span className="font-display font-bold uppercase tracking-[0.3em] text-lg text-white">
                                     {MESES[mesAtual.getMonth()]} {mesAtual.getFullYear()}
                                 </span>
-                                <button disabled={!windowLimit.unrestricted && `${mesAtual.getFullYear()}-${String(mesAtual.getMonth()+1).padStart(2,'0')}` >= windowLimit.end.slice(0,7)} onClick={() => setMesAtual(new Date(mesAtual.getFullYear(), mesAtual.getMonth() + 1))} className="disabled:opacity-25 disabled:cursor-not-allowed w-12 h-12 flex items-center justify-center border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] text-white transition-colors">
+                                <button disabled={`${mesAtual.getFullYear()}-${String(mesAtual.getMonth()+1).padStart(2,'0')}` >= calendarEnd.slice(0,7)} onClick={() => setMesAtual(new Date(mesAtual.getFullYear(), mesAtual.getMonth() + 1))} className="disabled:opacity-25 disabled:cursor-not-allowed w-12 h-12 flex items-center justify-center border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] text-white transition-colors">
                                     <ChevronRight size={20} />
                                 </button>
                             </div>
 
+                            {monthLoading && <p role="status" className="text-xs text-zinc-400 mb-4">Conferindo vagas com a agenda...</p>}
+                            {monthError && <p role="alert" className="text-xs text-red-300 mb-4">{monthError} <button type="button" className="underline text-primary" onClick={() => setMonthRefresh(x => x + 1)}>Tentar novamente</button></p>}
                             {/* Grid do calendário */}
                             <div className="grid grid-cols-7 gap-1 md:gap-2">
                                 {DIAS_SEMANA.map(d => (
                                     <div key={d} className="text-center text-[9px] font-bold uppercase tracking-[0.2em] text-zinc-500 py-4 hidden sm:block">{d}</div>
                                 ))}
                                 {DIAS_SEMANA.map(d => (
-                                    <div key={d + '_mob'} className="text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500 py-2 sm:hidden">{d[0]}</div>
+                                    <div key={d + '_mob'} className="text-center text-[9px] font-bold uppercase tracking-wider text-zinc-500 py-2 sm:hidden">{d}</div>
                                 ))}
 
                                 {getDiasCalendario().map((item, i) => {

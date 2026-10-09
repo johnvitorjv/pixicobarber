@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/auth';
 import { bahiaDate } from '../lib/bookingRules';
 import PhotoUpload from '../components/PhotoUpload';
+import { CalendarInput } from '../components/CalendarPicker';
 import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
 
 export default function RegisterPage() {
@@ -175,7 +176,7 @@ export default function RegisterPage() {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className={labelClass}>Nascimento</label>
-                                    <input type="date" max={bahiaDate()} name="nascimento" value={form.nascimento} onChange={handleChange} className={inputClass} />
+                                    <CalendarInput label="Data de nascimento" value={form.nascimento} maxDate={bahiaDate()} onChange={date => setForm(prev => ({ ...prev, nascimento:date }))} />
                                 </div>
                                 <div>
                                     <label className={labelClass}>Observações</label>

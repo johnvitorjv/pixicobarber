@@ -1,4 +1,5 @@
 import DayOverrideEditor from '../../components/DayOverrideEditor';
+import { CalendarInput } from '../../components/CalendarPicker';
 import { useState } from 'react';
 import { useAction } from '../../hooks/useAction';
 import DataState from '../../components/DataState';
@@ -214,7 +215,7 @@ export default function AdminDisponibilidade() {
                             )}
 
                             <div className="flex flex-col md:flex-row gap-4">
-                                <input type="date" value={bloqData} onChange={e => setBloqData(e.target.value)} className="bg-black border border-white/10 px-4 py-4 text-white font-modern focus:border-primary focus:outline-none flex-1 transition-colors" />
+                                <CalendarInput label="Data do bloqueio" value={bloqData} onChange={setBloqData} className="flex-1" />
                                 <input type="text" value={bloqMotivo} onChange={e => setBloqMotivo(e.target.value)} placeholder="Justificativa (OPCIONAL)" className="bg-black border border-white/10 px-4 py-4 text-white font-modern focus:border-primary focus:outline-none flex-[2] transition-colors" />
                                 <button onClick={addBloqueio} className="bg-primary/10 text-primary px-8 font-bold hover:bg-primary/20 transition-colors flex items-center justify-center min-h-[50px]"><Plus size={16} /></button>
                             </div>
@@ -236,8 +237,8 @@ export default function AdminDisponibilidade() {
                             )}
 
                             <div className="flex flex-col md:flex-row gap-4">
-                                <input type="date" value={feriaInicio} onChange={e => setFeriaInicio(e.target.value)} className="bg-black border border-white/10 px-4 py-4 text-white font-modern focus:border-primary focus:outline-none flex-1 transition-colors" />
-                                <input type="date" value={feriaFim} onChange={e => setFeriaFim(e.target.value)} className="bg-black border border-white/10 px-4 py-4 text-white font-modern focus:border-primary focus:outline-none flex-1 transition-colors" />
+                                <CalendarInput label="Início das férias" value={feriaInicio} onChange={setFeriaInicio} className="flex-1" />
+                                <CalendarInput label="Fim das férias" value={feriaFim} onChange={setFeriaFim} minDate={feriaInicio || undefined} className="flex-1" />
                                 <button onClick={addFerias} className="bg-primary/10 text-primary px-8 font-bold hover:bg-primary/20 transition-colors flex items-center justify-center min-h-[50px]"><Plus size={16} /></button>
                             </div>
                         </section>

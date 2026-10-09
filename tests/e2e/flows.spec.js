@@ -51,6 +51,18 @@ async function mockBackend(page, { admin = false, developer = false, failBooking
             else if(method==='DELETE') {state.overrides=[];response=[];}
             else response=state.overrides;
         }
+        else if (path.endsWith('/get_month_availability')) {
+            const params = req.postDataJSON();
+            const first = new Date(params.p_month + 'T12:00:00Z');
+            const month = first.getUTCMonth();
+            response = [];
+            for (let offset = 0; offset < 31; offset++) {
+                const cursor = new Date(first);
+                cursor.setUTCDate(cursor.getUTCDate() + offset);
+                if (cursor.getUTCMonth() !== month) break;
+                response.push({ day: cursor.toISOString().slice(0, 10), available: true });
+            }
+        }
         else if (path.endsWith('/get_available_slots')) response = [{id:'09:00',inicio:'09:00',fim:chemical?null:'09:45',disponivel:true}];
         else if (path.endsWith('/get_admin_appointments')) response = state.apps;
         else if (path.endsWith('/get_suggestion_slots')) response = [{id:'11:00',inicio:'11:00',fim:'11:45',disponivel:true}];
@@ -284,7 +296,7 @@ test('client changes booking to a free slot before the service date',async ({pag
     const dialog=page.getByRole('dialog',{name:'Alterar agendamento'});
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText('até o dia anterior',{exact:false})).toBeVisible();
-    await dialog.getByRole('button',{name:'09:30–10:15'}).click();
+    await dialog.getByRole('button',{name:'Horário 09:30 às 10:15'}).click();
     await dialog.getByRole('button',{name:'Solicitar alteração'}).click();
     await expect(dialog).toHaveCount(0);
     const changes=state.mutations.filter(m=>m.path.endsWith('/client_change_appointment'));
@@ -530,12 +542,52 @@ test('admin suggests a free slot and waits for the client to accept', async ({ p
     await page.getByRole('button', { name:'Rejeitar', exact:true }).click();
     await page.getByText('Sugerir novo horário ao cliente').click();
     await expect(page.getByRole('checkbox', { name:/Sugerir novo horário ao cliente/ })).toBeChecked();
-    await page.getByRole('dialog').locator('input[type=date]').fill(day);
-    await expect(page.getByLabel('Início da sugestão')).toHaveValue('11:00');
+    await page.getByRole('button', { name:'Selecionar ' + day.split('-').reverse().join('/') }).click();
+    await expect(page.getByRole('button', { name:'Horário 11:00 às 11:45' })).toBeVisible();
+    await page.getByRole('button', { name:'Horário 11:00 às 11:45' }).click();
     await page.getByRole('button', { name:'Enviar Proposta' }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
     expect(state.apps[0].status).toBe('aguardando_cliente');
     expect(state.apps[0].sugestao_data).toBe(day);
     await expect(page.getByText('Aguardando aceite do cliente')).toBeVisible();
     await expect(page.getByRole('button', { name:'Confirmar Remarcação' })).toHaveCount(0);
+});
+
+test('admin preview enlarges client avatar, and Escape closes', async ({page}) => {
+    await mockBackend(page,{admin:true,flagged:true});
+    await login(page);
+    await page.goto('/admin/agendamentos');
+    await page.getByRole('button',{name:'Ampliar foto de Cliente'}).click();
+    await expect(page.getByRole('dialog',{name:/Foto ampliada de Cliente/})).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog',{name:/Foto ampliada de Cliente/})).toHaveCount(0);
+});
+
+for (const width of [390,1280]) test('admin date filter uses weekday calendar on '+width+'px', async ({page}) => {
+    await page.setViewportSize({width,height:844});
+    await mockBackend(page,{admin:true,flagged:true});
+    await login(page);
+    await page.goto('/admin/agendamentos');
+    await page.getByRole('button',{name:'Filtrar por data'}).click();
+    for (const label of ['DOM','SEG','TER','QUA','QUI','SEX','SÁB'])
+        await expect(page.getByText(label,{exact:true}).first()).toBeVisible();
+    await page.getByRole('button',{name:'Selecionar '+day.split('-').reverse().join('/')}).click();
+    await expect(page.getByText('1 resultado(s)')).toBeVisible();
+    await page.getByRole('button',{name:'Filtrar por data'}).click();
+    await page.getByRole('button',{name:'Limpar data'}).click();
+    await expect(page.getByText('1 resultado(s)')).toBeVisible();
+});
+
+test('barber suggests an available slot on mobile without a native date input', async ({page}) => {
+    await page.setViewportSize({width:390,height:844});
+    await mockBackend(page,{admin:true,flagged:true});
+    await login(page);
+    await page.goto('/admin/agendamentos');
+    await page.getByRole('button',{name:'Rejeitar',exact:true}).click();
+    await page.getByText('Sugerir novo horário ao cliente').click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByRole('button',{name:'Selecionar '+day.split('-').reverse().join('/')}).click();
+    await dialog.getByRole('button',{name:'Horário 11:00 às 11:45'}).click();
+    await expect(dialog.getByRole('button',{name:'Enviar Proposta'})).toBeEnabled();
+    await dialog.screenshot({path:'test-results/admin-suggestion-mobile.png'});
 });

@@ -1,4 +1,8 @@
 import { useState, useEffect } from 'react';
+import { CalendarInput } from '../../components/CalendarPicker';
+import AvailabilityCalendar from '../../components/AvailabilityCalendar';
+import { bahiaDate } from '../../lib/bookingRules';
+import { addCalendarDays } from '../../lib/bookingWindow';
 import { requireSupabase } from '../../lib/supabase';
 import { useAction } from '../../hooks/useAction';
 import DataState from '../../components/DataState';
@@ -27,6 +31,7 @@ export default function AdminAgendamentos() {
     const [busca, setBusca] = useState('');
     const [filtroData, setFiltroData] = useState('');
     const [modal, setModal] = useState(null);
+    const [photoClient, setPhotoClient] = useState(null);
 
     // Rejeição state
     const [motivosSelecionados, setMotivosSelecionados] = useState([]);
@@ -38,8 +43,7 @@ export default function AdminAgendamentos() {
     const [mensagemWpp, setMensagemWpp] = useState('');
     const [whatsappOpened, setWhatsappOpened] = useState(false);
     const [whatsappConfirmed, setWhatsappConfirmed] = useState(false);
-    const [proposalSlots, setProposalSlots] = useState([]);
-    const [proposalLoading, setProposalLoading] = useState(false);
+
 
     // Conclusão state
     const [valorCobrado, setValorCobrado] = useState('');
@@ -50,21 +54,11 @@ export default function AdminAgendamentos() {
 
     const { clients, loading: clientsLoading, error: clientsError, refetch: refetchClients } = useSupabaseClients();
     useEffect(() => {
-        if (modal?.tipo !== 'rejeitar' || !sugerirNovo || !novaData) return;
-        let live = true;
-        queueMicrotask(() => { if (live) setProposalLoading(true); });
-        requireSupabase().rpc('get_suggestion_slots', { p_appointment: modal.ag.id, p_date: novaData })
-            .then(({ data, error }) => {
-                if (!live) return;
-                const available = error ? [] : (data || []).filter(slot => slot.disponivel);
-                setProposalSlots(available);
-                const first = available[0];
-                setNovaFaixaInicio(first?.inicio || '');
-                setNovaFaixaFim(first?.fim || '');
-                setProposalLoading(false);
-            });
-        return () => { live = false; };
-    }, [modal?.ag?.id, modal?.tipo, novaData, sugerirNovo]);
+        if (!photoClient) return undefined;
+        const close = e => { if (e.key === 'Escape') setPhotoClient(null); };
+        window.addEventListener('keydown', close);
+        return () => window.removeEventListener('keydown', close);
+    }, [photoClient]);
 
     useEffect(() => {
         if (modal?.tipo !== 'rejeitar') return;
@@ -157,8 +151,17 @@ export default function AdminAgendamentos() {
             if (!sugerirNovo && !motivo.trim()) {
                 throw new Error('Informe um motivo claro para recusar o agendamento.');
             }
-            if (sugerirNovo && !proposalSlots.some(s => s.disponivel && s.inicio === novaFaixaInicio && s.fim === novaFaixaFim)) {
-                throw new Error('Escolha um horário livre para sugerir.');
+            if (sugerirNovo) {
+                if (!novaData || !novaFaixaInicio || !novaFaixaFim) throw new Error('Escolha um dia e horário disponíveis.');
+                // Revalidate right before submission; the DB's exclusion constraint
+                // is the final guard against simultaneous reservations.
+                const { data: currentSlots, error: slotError } = await requireSupabase().rpc('get_suggestion_slots', {
+                    p_appointment: modal.ag.id, p_date: novaData
+                });
+                if (slotError) throw slotError;
+                if (!(currentSlots || []).some(s => s.disponivel && s.inicio === novaFaixaInicio && s.fim === novaFaixaFim)) {
+                    throw new Error('Esse horário acabou de ser ocupado. Escolha outro dia ou horário.');
+                }
             }
             const updates = { status: sugerirNovo ? 'aguardando_cliente' : 'rejeitado', motivoRejeicao: motivo };
             if (sugerirNovo) { updates.sugestaoNovaData = novaData; updates.sugestaoInicio = novaFaixaInicio; updates.sugestaoFim = novaFaixaFim; }
@@ -194,6 +197,16 @@ export default function AdminAgendamentos() {
 
     return (
         <div className="p-6 md:p-10 max-w-[1600px] mx-auto">
+            {photoClient && <div role="dialog" aria-modal="true" aria-label={`Foto ampliada de ${photoClient.nome}`}
+                className="fixed inset-0 z-[250] bg-black/95 flex items-center justify-center p-4 sm:p-8" onClick={() => setPhotoClient(null)}>
+                <div className="relative max-w-2xl w-full flex flex-col items-center gap-5" onClick={e => e.stopPropagation()}>
+                    <button type="button" aria-label="Fechar foto" onClick={() => setPhotoClient(null)}
+                        className="absolute right-0 -top-1 p-2 border border-white/20 bg-black text-white hover:text-primary"><X size={22} /></button>
+                    <img src={photoClient.foto} alt={`Foto de ${photoClient.nome}`}
+                        className="max-h-[77dvh] max-w-full object-contain border border-white/10 shadow-2xl" />
+                    <p className="font-display font-bold uppercase tracking-widest text-white text-sm sm:text-lg">{photoClient.nome}</p>
+                </div>
+            </div>}
             <DataState loading={sbLoading || clientsLoading || action.busy} error={queryError || clientsError || (!modal ? action.error : '')} retry={() => Promise.all([refetchAppointments(), refetchClients()])} />
             <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
@@ -215,12 +228,7 @@ export default function AdminAgendamentos() {
                     />
                 </div>
                 <div className="flex flex-wrap gap-4">
-                    <input
-                        type="date"
-                        value={filtroData}
-                        onChange={e => setFiltroData(e.target.value)}
-                        className="bg-transparent border-b border-white/20 px-0 py-3 text-sm text-white font-modern focus:border-primary focus:outline-none placeholder:text-zinc-700 transition-colors"
-                    />
+                    <CalendarInput label="Filtrar por data" placeholder="Todas as datas" value={filtroData} onChange={setFiltroData} />
                     <select
                         value={filtroStatus}
                         onChange={e => setFiltroStatus(e.target.value)}
@@ -261,7 +269,9 @@ export default function AdminAgendamentos() {
                                     <tr key={ag.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors group">
                                         <td className="py-4 px-6">
                                             <div className="flex flex-wrap items-center gap-4">
-                                                <Avatar src={cliente?.fotoUrl} initials={`${cliente?.nome?.[0] || ''}${cliente?.sobrenome?.[0] || ''}`} size="sm" className="ring-1 ring-primary/20 grayscale group-hover:grayscale-0 transition-all duration-500" />
+                                                <button type="button" title="Ampliar foto do cliente" aria-label={`Ampliar foto de ${cliente?.nome || 'cliente'}`} disabled={!cliente?.fotoUrl} onClick={() => setPhotoClient({ nome: `${cliente?.nome || 'Cliente'} ${cliente?.sobrenome || ''}`, foto: cliente.fotoUrl })} className="rounded-full focus:outline-2 focus:outline-primary disabled:cursor-default cursor-zoom-in" >
+                                                    <Avatar src={cliente?.fotoUrl} initials={`${cliente?.nome?.[0] || ''}${cliente?.sobrenome?.[0] || ''}`} size="sm" className="ring-1 ring-primary/20 grayscale group-hover:grayscale-0 transition-all duration-500" />
+                                                </button>
                                                 <div className="flex flex-col">
                                                     <div className="flex items-center gap-2">
                                                         <span className="font-bold text-sm tracking-wide">{cliente?.apelido || cliente?.nome || '—'} {cliente?.sobrenome?.[0] || ''}</span>
@@ -337,7 +347,7 @@ export default function AdminAgendamentos() {
                     </div>
                     {modal.ag.confirmacaoManual && <div className="space-y-3 mb-6 border border-yellow-500/30 p-4">
                         <p className="text-sm text-yellow-300">Defina a ocupação total, incluindo processamento e lavagem (30 a 480 min). A confirmação exige todo o intervalo livre.</p>
-                        <label className="block">Data do atendimento<input aria-label="Data do atendimento" type="date" className="w-full bg-black border border-white/20 p-2" value={novaData} onChange={e=>setNovaData(e.target.value)} /></label>
+                        <label className="block text-sm text-zinc-300">Data do atendimento</label><CalendarInput label="Data do atendimento" value={novaData} onChange={setNovaData} minDate={bahiaDate()} maxDate={addCalendarDays(bahiaDate(), 59)} />
                         <label className="block">Início ocupado<input aria-label="Início ocupado" type="time" step="900" className="w-full bg-black border border-white/20 p-2" value={novaFaixaInicio} onChange={e=>setNovaFaixaInicio(e.target.value)} /></label>
                         <label className="block">Fim ocupado<input aria-label="Fim ocupado" type="time" className="w-full bg-black border border-white/20 p-2" value={novaFaixaFim} onChange={e=>setNovaFaixaFim(e.target.value)} /></label>
                     </div>}
@@ -409,28 +419,20 @@ export default function AdminAgendamentos() {
                         <span className="text-sm font-modern text-white">Sugerir novo horário ao cliente</span>
                     </label>
                     {sugerirNovo && (
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 p-6 border border-white/5 bg-black">
-                            <div>
-                                <label className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 block mb-2">Nova Data</label>
-                                <input type="date" value={novaData} min={new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bahia' })} onChange={e => setNovaData(e.target.value)} className="w-full bg-transparent border-b border-white/20 py-2 text-sm text-white font-modern focus:border-primary focus:outline-none transition-colors" />
-                            </div>
-                            <div>
-                                <label className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 block mb-2">Início</label>
-                                <select aria-label="Início da sugestão" value={novaFaixaInicio} onChange={e => {
-                                    const chosen = proposalSlots.find(s => s.inicio === e.target.value);
-                                    setNovaFaixaInicio(chosen?.inicio || '');
-                                    setNovaFaixaFim(chosen?.fim || '');
-                                }} className="w-full bg-black border-b border-white/20 py-2 text-sm text-white font-modern focus:border-primary focus:outline-none transition-colors">
-                                    {proposalSlots.map(s => <option key={s.inicio} value={s.inicio}>{s.inicio}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 block mb-2">Fim</label>
-                                <input aria-label="Fim calculado" readOnly type="time" value={novaFaixaFim} className="w-full bg-transparent border-b border-white/20 py-2 text-sm text-primary font-modern" />
-                            </div>
+                        <div className="mb-6 p-3 sm:p-5 border border-white/10 bg-black">
+                            <AvailabilityCalendar
+                                mode="suggestion"
+                                appointmentId={modal.ag.id}
+                                date={novaData}
+                                onDateChange={next => { setNovaData(next); setNovaFaixaInicio(''); setNovaFaixaFim(''); }}
+                                start={novaFaixaInicio}
+                                onSlotChange={slot => { setNovaFaixaInicio(slot?.inicio || ''); setNovaFaixaFim(slot?.fim || ''); }}
+                                minDate={bahiaDate()}
+                                maxDate={addCalendarDays(bahiaDate(), 59)}
+                                compact
+                            />
                         </div>
                     )}
-                    {sugerirNovo && <p className="mb-4 text-xs text-zinc-400">{proposalLoading ? 'Consultando horários livres...' : proposalSlots.length ? 'O fim é calculado automaticamente conforme a duração do serviço.' : 'Nenhum horário disponível na data selecionada.'}</p>}
                     <div className="mb-3 text-xs text-zinc-400">
                         <p>O cliente recebe o aviso por e-mail e no painel. Enviar também pelo WhatsApp é opcional.</p>
                         {whatsappOpened && <label className="mt-2 flex items-center gap-3"><input type="checkbox" checked={whatsappConfirmed} onChange={e => setWhatsappConfirmed(e.target.checked)} /> Também avisei pelo WhatsApp (opcional).</label>}
@@ -505,7 +507,7 @@ function ModalOverlay({ children, onClose }) {
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6 overflow-y-auto">
             <div className="fixed inset-0 bg-background-dark/80 backdrop-blur-xl transition-opacity" onClick={onClose} />
-            <div role="dialog" aria-modal="true" className="relative bg-black border border-white/10 p-8 w-full max-w-lg shadow-2xl z-10 my-auto">
+            <div role="dialog" aria-modal="true" className="relative bg-black border border-white/10 p-4 sm:p-7 w-full max-w-2xl max-h-[94dvh] overflow-y-auto shadow-2xl z-10 my-auto">
                 <button
                     onClick={onClose}
                     aria-label="Fechar diálogo"
