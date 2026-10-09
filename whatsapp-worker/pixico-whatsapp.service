@@ -1,0 +1,25 @@
+[Unit]
+Description=PIXICO BARBER WhatsApp notifications (opt-in only)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/pixico-whatsapp
+EnvironmentFile=/etc/pixico-whatsapp/worker.env
+ExecStart=/usr/bin/node /opt/pixico-whatsapp/worker.mjs
+StateDirectory=pixico-whatsapp
+StateDirectoryMode=0700
+Restart=on-failure
+RestartSec=12
+MemoryMax=700M
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/pixico-whatsapp
+
+[Install]
+WantedBy=multi-user.target

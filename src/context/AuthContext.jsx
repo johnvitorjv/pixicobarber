@@ -23,7 +23,7 @@ export function AuthProvider({ children }) {
         if (currentUserId.current !== authUser.id) setLoading(true);
         try {
             const { data, error: queryError } = await supabase.from('profiles')
-                .select('id,nome,sobrenome,whatsapp,role,is_developer,foto_url,nascimento,criado_em').eq('id', authUser.id).single();
+                .select('id,nome,sobrenome,whatsapp,whatsapp_opt_in,role,is_developer,foto_url,nascimento,criado_em').eq('id', authUser.id).single();
             if (queryError) throw queryError;
             const safeUser = profileToUser(authUser, data);
             if (request === generation.current) { currentUserId.current = safeUser.id; setUser(safeUser); setError(''); }
@@ -91,7 +91,7 @@ export function AuthProvider({ children }) {
             email, password: dados.senha,
             options: { emailRedirectTo: window.location.origin + '/login', data: {
                 nome: dados.nome.trim(), sobrenome: dados.sobrenome.trim(),
-                whatsapp: normalizeWhatsApp(dados.whatsapp), nascimento: dados.nascimento || '',
+                whatsapp: normalizeWhatsApp(dados.whatsapp), whatsapp_opt_in: dados.whatsappOptIn === true, nascimento: dados.nascimento || '',
                 observacoes: dados.observacoes?.trim() || '',
                 fotoUrl: photo.url,
                 fotoPath: photo.path,

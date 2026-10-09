@@ -227,6 +227,22 @@ export default function DashboardPage() {
                             </div>
                         </div>
 
+                        <div className="border border-white/10 bg-zinc-950 px-5 py-5 mb-8">
+                            <label className="flex items-start gap-4 cursor-pointer">
+                                <input type="checkbox" className="mt-1 accent-primary" checked={user?.whatsappOptIn === true}
+                                    disabled={action.busy}
+                                    onChange={e => { const allow = e.target.checked; void action.execute(async () => {
+                                        await updateProfileSupabase(user.id, { whatsapp_opt_in: allow });
+                                        await refreshUser();
+                                    }, allow ? 'Avisos por WhatsApp autorizados.' : 'Avisos por WhatsApp desativados.'); }}
+                                    aria-label="Receber notificações de agendamentos pelo WhatsApp" />
+                                <span className="text-sm text-zinc-300 leading-relaxed">
+                                    <strong className="text-white block mb-1">Notificações pelo WhatsApp (opcional)</strong>
+                                    Receber confirmações, mudanças, cancelamentos e lembretes da PIXICO BARBER no número cadastrado.
+                                    Você pode revogar esta autorização aqui. Os e-mails continuam funcionando normalmente.
+                                </span>
+                            </label>
+                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-10">
                             <div>
                                 <span className="text-[10px] font-bold uppercase tracking-[0.5em] text-zinc-600 block mb-3">Nome Completo</span>

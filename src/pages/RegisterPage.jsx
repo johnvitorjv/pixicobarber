@@ -19,6 +19,7 @@ export default function RegisterPage() {
         nome: '',
         sobrenome: '',
         whatsapp: '',
+        whatsappOptIn: false,
         email: '',
         senha: '',
         confirmarSenha: '',
@@ -139,6 +140,18 @@ export default function RegisterPage() {
                             <label className={labelClass}>WhatsApp *</label>
                             <input type="tel" name="whatsapp" maxLength={20} required autoComplete="tel" value={form.whatsapp} onChange={handleChange} className={inputClass} placeholder="(71) 99999-9999" />
                         </div>
+
+                        <label className="flex items-start gap-3 border border-white/10 bg-black/40 p-4 cursor-pointer">
+                            <input type="checkbox" checked={form.whatsappOptIn}
+                                onChange={e => setForm(prev => ({ ...prev, whatsappOptIn: e.target.checked }))}
+                                className="accent-primary mt-1" aria-label="Aceito receber notificações de agendamentos pelo WhatsApp" />
+                            <span className="text-xs leading-relaxed text-zinc-300">
+                                Quero receber <strong>avisos de agendamentos pelo WhatsApp</strong> da PIXICO BARBER,
+                                incluindo confirmações, alterações, cancelamentos e lembretes.
+                                É opcional e posso desativar a qualquer momento no meu painel.
+                                Não autorizo publicidade.
+                            </span>
+                        </label>
 
                         {/* E-mail */}
                         <div>

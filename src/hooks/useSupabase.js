@@ -94,7 +94,7 @@ export function useSupabaseClients() {
     return { ...state, clients };
 }
 export async function updateProfileSupabase(id, updates) {
-    const allowed = ['favorito','foto_url','observacoes','whatsapp','nome','sobrenome','apelido','observacoes_admin','blacklist','blacklist_motivo','tags'];
+    const allowed = ['favorito','foto_url','observacoes','whatsapp','whatsapp_opt_in','nome','sobrenome','apelido','observacoes_admin','blacklist','blacklist_motivo','tags'];
     const mapped = Object.fromEntries(Object.entries(updates).filter(([key]) => allowed.includes(key)));
     const { data, error } = await requireSupabase().from('profiles').update(mapped).eq('id',id).select('id').single();
     if (error) throw error;
