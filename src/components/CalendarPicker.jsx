@@ -76,7 +76,7 @@ export function CalendarInput({ value, onChange, minDate, maxDate, label = 'Data
         <button type="button" aria-label={label} aria-expanded={open} onClick={() => setOpen(v => !v)} className="w-full min-w-[135px] flex items-center justify-between gap-3 text-left bg-black border border-white/20 hover:border-primary/50 focus:outline-primary p-3 text-xs sm:text-sm text-white">
             <span>{displayDay(value) || placeholder}</span><CalendarDays size={17} className="text-primary shrink-0" />
         </button>
-        {open && <div className="absolute z-[200] top-full right-0 mt-2 w-[min(88vw,365px)] shadow-[0_20px_60px_rgba(0,0,0,.9)]">
+        {open && <div className="fixed z-[200] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 sm:absolute sm:left-auto sm:top-full sm:right-0 sm:translate-x-0 sm:translate-y-0 sm:mt-2 w-[min(88vw,365px)] max-h-[calc(100dvh-2rem)] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,.9)]">
             <div className="border border-white/15 bg-black flex items-center justify-between px-3 py-2"><span className="text-zinc-400 text-[10px] uppercase tracking-widest">{label}</span><button type="button" aria-label="Fechar calendário" onClick={() => setOpen(false)}><X size={15} /></button></div>
             <CalendarPicker value={value} minDate={minDate} maxDate={maxDate} onChange={next => { onChange(next); setOpen(false); }} compact label={`Calendário: ${label}`} />
             {value && <button type="button" className="w-full border border-white/10 bg-black px-4 py-2 text-xs text-zinc-300 hover:text-primary" onClick={() => { onChange(''); setOpen(false); }}>Limpar data</button>}

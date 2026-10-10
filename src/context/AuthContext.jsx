@@ -23,7 +23,7 @@ export function AuthProvider({ children }) {
         if (currentUserId.current !== authUser.id) setLoading(true);
         try {
             const { data, error: queryError } = await supabase.from('profiles')
-                .select('id,nome,sobrenome,whatsapp,whatsapp_opt_in,role,is_developer,foto_url,nascimento,criado_em').eq('id', authUser.id).single();
+                .select('id,nome,sobrenome,whatsapp,whatsapp_opt_in,favorito,role,is_developer,foto_url,nascimento,criado_em').eq('id', authUser.id).single();
             if (queryError) throw queryError;
             const safeUser = profileToUser(authUser, data);
             if (request === generation.current) { currentUserId.current = safeUser.id; setUser(safeUser); setError(''); }

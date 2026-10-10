@@ -34,7 +34,7 @@ export default function BookingPage() {
 
     useStoreSync();
     const windowLimit = bookingWindow(user);
-    const disponibilidade = availabilityStore.getRange(10);
+    const disponibilidade = availabilityStore.getRange(windowLimit.unrestricted ? 60 : windowLimit.days + 1);
 
     // Dados persistidos exclusivamente pelo Supabase.
     const { loading: sbServicesLoading, error: servicesError, refetch: refetchServices, getById: sbGetById, getVisiveis: sbGetVisiveis } = useSupabaseServices();
@@ -130,7 +130,7 @@ export default function BookingPage() {
                 passado,
                 disponivel: !passado && !foraDoPrazo && monthAvailable[chave] === true && info?.disponivel === true && serviceAllowedOnDate(servicoSelecionado,chave),
                 fechado: foraDoPrazo || monthAvailable[chave] !== true || !info?.disponivel || !serviceAllowedOnDate(servicoSelecionado,chave),
-                motivo: foraDoPrazo ? 'Agenda aberta apenas até 7 dias' : (info?.motivo || ''),
+                motivo: foraDoPrazo ? `Agenda aberta apenas até ${windowLimit.days} dias` : (info?.motivo || ''),
             });
         }
 
@@ -141,7 +141,7 @@ export default function BookingPage() {
         if (submitting.current) return;
         const selected = slots.find(f => f.id === faixaSelecionada && f.disponivel);
         if (!selected || !servicoSelecionado || slotsLoading) { setError('Verifique o horário e tente novamente.'); return; }
-        if (!windowLimit.unrestricted && dataSelecionada > windowLimit.end) { setError('Escolha um dia dentro dos próximos 7 dias.'); return; }
+        if (!windowLimit.unrestricted && dataSelecionada > windowLimit.end) { setError(`Escolha um dia dentro dos próximos ${windowLimit.days} dias.`); return; }
         submitting.current = true; setConfirming(true); setError('');
         try {
             await createAppointmentSupabase({

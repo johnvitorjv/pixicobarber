@@ -4,7 +4,7 @@ export function profileToUser(authUser, profile) {
         id: authUser.id, email: authUser.email || '', nome: profile.nome || '',
         sobrenome: profile.sobrenome || '', whatsapp: profile.whatsapp || '', whatsappOptIn: profile.whatsapp_opt_in === true,
         fotoUrl: profile.foto_url || '', role: profile.role === 'admin' ? 'admin' : 'client',
-        isDeveloper: profile.is_developer === true,
+        isDeveloper: profile.is_developer === true, favorito: profile.favorito === true,
         nascimento: profile.nascimento, criadoEm: profile.criado_em,
     };
 }

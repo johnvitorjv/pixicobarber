@@ -1,4 +1,4 @@
-import { bahiaDate } from './bookingRules';
+import { bahiaDate } from './bookingRules.js';
 
 export function addCalendarDays(iso, days) {
     const date = new Date(`${iso}T12:00:00Z`);
@@ -7,7 +7,8 @@ export function addCalendarDays(iso, days) {
 }
 
 export function bookingWindow(user, today = bahiaDate()) {
-    return { start: today, end: addCalendarDays(today, 7), unrestricted: !!user?.isDeveloper };
+    const days = user?.isDeveloper ? 7 : user?.favorito ? 14 : 7;
+    return { start: today, end: addCalendarDays(today, days), days, unrestricted: !!user?.isDeveloper };
 }
 
 export function editableUntilPreviousDay(appointment, today = bahiaDate()) {

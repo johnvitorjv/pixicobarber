@@ -8,13 +8,13 @@ test.beforeEach(async ({page}) => {
     await page.route('**/*', route => ['127.0.0.1','localhost'].includes(new URL(route.request().url()).hostname) ? route.continue() : route.abort());
 });
 
-async function mockBackend(page, { admin = false, developer = false, failBooking = false, failService = false, failLogout = false, flagged = false, chemical = false, failOverride = false, failConfirmation = false } = {}) {
+async function mockBackend(page, { admin = false, developer = false, favorite = false, failBooking = false, failService = false, failLogout = false, flagged = false, chemical = false, failOverride = false, failConfirmation = false } = {}) {
     const state = { mutations: [], apps: [], signedOut: false, failLogout, failConfirmation, config: {nomeNegocio:'PIXICO Barber',whatsappNumero:'5571994096863',endereco:'Salvador',blacklistBehavior:'approval'} };
     const payload = Buffer.from(JSON.stringify({sub:id,exp:Math.floor(Date.now()/1000)+3600,role:'authenticated'})).toString('base64url');
     state.accessToken = 'eyJhbGciOiJIUzI1NiJ9.'+payload+'.test-signature';
     const authUser = { id, email: 'teste@example.invalid', aud: 'authenticated', role: 'authenticated',
         user_metadata: { role: 'admin', nome: 'Metadados não confiáveis' } };
-    const profile = { id, nome: 'Cliente', sobrenome: 'Teste', role: admin ? 'admin' : 'client', is_developer: developer, whatsapp: '5571999990000', foto_url: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==', criado_em: '2026-01-01T12:00:00Z' };
+    const profile = { id, nome: 'Cliente', sobrenome: 'Teste', role: admin ? 'admin' : 'client', is_developer: developer, favorito: favorite, whatsapp: '5571999990000', foto_url: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==', criado_em: '2026-01-01T12:00:00Z' };
     const service = { id: serviceId, nome: 'Corte', descricao_curta: 'Corte de teste', preco: 60, duracao: 45,
         categoria: 'corte', status: 'ativo', ordem: 1, visivel_home: true, visivel_cliente: true, visivel_agendamento: true };
     if (chemical) Object.assign(service,{nome:typeof chemical==='string'?chemical:'Platinado',descricao_curta:'Químico de teste',preco:chemical==='Luzes'?80:100,duracao:null,confirmacao_manual:true,aplicacao_minutos:15});
@@ -590,4 +590,29 @@ test('barber suggests an available slot on mobile without a native date input', 
     await dialog.getByRole('button',{name:'Horário 11:00 às 11:45'}).click();
     await expect(dialog.getByRole('button',{name:'Enviar Proposta'})).toBeEnabled();
     await dialog.screenshot({path:'test-results/admin-suggestion-mobile.png'});
+});
+
+test('favorite client receives fourteen-day booking horizon', async ({page}) => {
+    await mockBackend(page,{favorite:true});
+    await login(page);
+    await expect(page).toHaveURL(/\/painel$/);
+    await page.goto('/agendar');
+    await page.getByRole('button',{name:/Corte de teste/}).click();
+    const start=new Date(bahiaDate()+'T12:00:00');
+    const end=new Date(start); end.setDate(end.getDate()+14);
+    const formatted=bahiaDate(end).split('-').reverse().join('/');
+    await expect(page.getByText('Agenda móvel: escolha um dia até '+formatted+'. Novos dias abrem automaticamente.')).toBeVisible();
+    const next=page.locator('button:has(svg.lucide-chevron-right)').last();
+    if(start.getMonth()!==end.getMonth()||start.getFullYear()!==end.getFullYear()){
+        await expect(next).toBeEnabled();
+    }
+});
+
+test('favorite developer keeps unrestricted booking horizon', async ({page}) => {
+    await mockBackend(page,{favorite:true,developer:true});
+    await login(page);
+    await expect(page).toHaveURL(/\/painel$/);
+    await page.goto('/agendar');
+    await page.getByRole('button',{name:/Corte de teste/}).click();
+    await expect(page.getByText('Acesso de desenvolvedor: escolha qualquer dia disponível.')).toBeVisible();
 });
