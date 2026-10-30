@@ -630,3 +630,59 @@ test('favorite client is first and visibly highlighted in admin list', async ({p
     await expect(cards.first()).toContainText('Favorito · Prioridade');
     await expect(cards.last()).toHaveAttribute('data-favorite', 'false');
 });
+
+
+test('favorite pending request leads list only until approved; old favorite bookings keep chronological order', async ({page}) => {
+    await mockBackend(page, {admin:true});
+    const favoriteId='77777777-7777-4777-8777-777777777777';
+    const regularId='88888888-8888-4888-8888-888888888888';
+    const favorite={id:favoriteId,nome:'VIP',sobrenome:'Teste',role:'client',favorito:true,criado_em:'2026-10-01T00:00:00Z',tags:[],blacklist:false};
+    const regular={...favorite,id:regularId,nome:'Comum',favorito:false};
+    const create=(id,owner,name,status,created) => ({
+        id,cliente_id:owner.id,servico_id:serviceId,data:day,
+        faixa_inicio:'09:00',faixa_fim:'09:45',status,
+        servico_nome_reservado:name,preco_reservado:60,
+        criado_em:created,atualizado_em:created,
+        profiles:owner,services:{id:serviceId,nome:'Corte',preco:60,duracao:45}
+    });
+    // Newest first, mirroring Supabase's default descending criado_em order.
+    const appointments=[
+        create('a0000000-0000-4000-8000-000000000001',regular,'Comum mais recente','pendente','2026-10-30T12:05:00Z'),
+        create('a0000000-0000-4000-8000-000000000002',favorite,'VIP já aprovado','confirmado','2026-10-30T12:04:00Z'),
+        create('a0000000-0000-4000-8000-000000000003',favorite,'VIP aguardando','pendente','2026-10-30T12:03:00Z'),
+        create('a0000000-0000-4000-8000-000000000004',favorite,'VIP histórico','concluido','2026-10-10T12:00:00Z'),
+    ];
+    await page.route('**/rpc/get_admin_clients*', route=>route.fulfill({
+        status:200,contentType:'application/json',body:JSON.stringify(Number(new URL(route.request().url()).searchParams.get('offset')||0)>0 ? [] : [favorite,regular]),
+    }));
+    await page.route('**/rpc/get_admin_appointments*',route=>route.fulfill({
+        status:200,contentType:'application/json',body:JSON.stringify(Number(new URL(route.request().url()).searchParams.get('offset')||0)>0 ? [] : appointments),
+    }));
+    await page.route('**/rest/v1/appointments*',async route=>{
+        if(route.request().method()!=='PATCH') return route.fallback();
+        const query=new URL(route.request().url()).searchParams.get('id')||'';
+        const appointment=appointments.find(a=>query===('eq.'+a.id));
+        if(!appointment) return route.fulfill({status:404,contentType:'application/json',body:JSON.stringify({message:'Not found'})});
+        Object.assign(appointment,route.request().postDataJSON());
+        return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({id:appointment.id})});
+    });
+    await login(page);
+    await expect(page).toHaveURL(/\/admin$/);
+    await page.goto('/admin/agendamentos');
+    const rows=page.locator('tbody tr');
+    await expect(rows).toHaveCount(4);
+    await expect(rows.first()).toContainText('VIP aguardando');
+    await expect(rows.first()).toHaveAttribute('data-priority','true');
+    await expect(rows.nth(1)).toContainText('Comum mais recente');
+    await expect(rows.nth(2)).toContainText('VIP já aprovado');
+    await expect(rows.nth(2)).toHaveAttribute('data-priority','false');
+    await expect(rows.last()).toContainText('VIP histórico');
+
+    await rows.first().getByRole('button',{name:'Aprovar',exact:true}).click();
+    await page.getByRole('button',{name:'Confirmar Aprovação'}).click();
+    await expect(rows.first()).toContainText('Comum mais recente');
+    await expect(rows.nth(1)).toContainText('VIP já aprovado');
+    await expect(rows.nth(2)).toContainText('VIP aguardando');
+    await expect(rows.nth(2)).toHaveAttribute('data-priority','false');
+    await expect(rows.last()).toContainText('VIP histórico');
+});

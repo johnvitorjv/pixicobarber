@@ -8,6 +8,7 @@ import { useAction } from '../../hooks/useAction';
 import DataState from '../../components/DataState';
 import { timeMinutes } from '../../lib/bookingRules';
 import { STATUS, STATUS_CONFIG, MOTIVOS_REJEICAO, FORMAS_PAGAMENTO } from '../../data/models';
+import { isPriorityFavoriteRequest, prioritizePendingFavorites } from '../../lib/favoriteRequestPriority';
 import { TEMPLATES, gerarLinkWhatsAppCliente } from '../../data/whatsappTemplates';
 import { useStoreSync } from '../../hooks/useStore';
 import { useSupabaseAppointments, useSupabaseClients, updateAppointmentSupabase } from '../../hooks/useSupabase';
@@ -95,8 +96,7 @@ export default function AdminAgendamentos() {
                 );
             });
         }
-        const favoriteIds = new Set(clients.filter(c => c.favorito).map(c => c.id));
-        return [...all].sort((a, b) => Number(favoriteIds.has(b.clienteId)) - Number(favoriteIds.has(a.clienteId)));
+        return prioritizePendingFavorites(all, clients);
     })();
 
     // Dados persistidos exclusivamente pelo Supabase.
@@ -265,9 +265,10 @@ export default function AdminAgendamentos() {
                         <tbody>
                             {agendamentos.map(ag => {
                                 const cliente = getCliente(ag);
+                                const priority = isPriorityFavoriteRequest(ag, cliente?.favorito);
                                 const sc = STATUS_CONFIG[ag.status] || {};
                                 return (
-                                    <tr key={ag.id} data-favorite={cliente?.favorito ? "true" : "false"} className={`border-b hover:bg-white/[0.02] transition-colors group ${cliente?.favorito ? "border-primary/30 bg-primary/[0.04]" : "border-white/5"}`}>
+                                    <tr key={ag.id} data-priority={priority ? "true" : "false"} className={`border-b hover:bg-white/[0.02] transition-colors group ${priority ? "border-primary/30 bg-primary/[0.04]" : "border-white/5"}`}>
                                         <td className="py-4 px-6">
                                             <div className="flex flex-wrap items-center gap-4">
                                                 <button type="button" title="Ampliar foto do cliente" aria-label={`Ampliar foto de ${cliente?.nome || 'cliente'}`} disabled={!cliente?.fotoUrl} onClick={() => setPhotoClient({ nome: `${cliente?.nome || 'Cliente'} ${cliente?.sobrenome || ''}`, foto: cliente.fotoUrl })} className="rounded-full focus:outline-2 focus:outline-primary disabled:cursor-default cursor-zoom-in" >
