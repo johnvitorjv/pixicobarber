@@ -183,7 +183,12 @@ export default function AdminDisponibilidade() {
                             <h3 className="font-display font-bold text-lg uppercase tracking-widest border-b border-white/10 pb-4 mb-6">Expediente</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                                 <InputField label="Abertura" value={config.horarioInicio} onChange={v => setConfig(previous => { const c = previous || config; return ({ ...c, horarioInicio: v }); })} type="time" />
-                                <InputField label="Fechamento" value={config.horarioFim} onChange={v => setConfig(previous => { const c = previous || config; return ({ ...c, horarioFim: v }); })} type="time" />
+                                <InputField label="Fechamento (outros dias)" value={config.horarioFim} onChange={v => setConfig(previous => { const c = previous || config; return ({ ...c, horarioFim: v }); })} type="time" />
+                                {[5, 6].map(weekday => (
+                                    <InputField key={weekday} label={`Fechamento ${weekday === 5 ? "sexta-feira" : "sábado"}`} type="time"
+                                        value={config.horarioFimPorDia?.[weekday] || config.horarioFim}
+                                        onChange={v => setConfig(previous => { const c = previous || config; return ({ ...c, horarioFimPorDia: { ...c.horarioFimPorDia, [weekday]: v } }); })} />
+                                ))}
                                 <InputField label="Pausa Início" value={config.intervaloAlmoco.inicio} onChange={v => setConfig(previous => { const c = previous || config; return ({ ...c, intervaloAlmoco: { ...c.intervaloAlmoco, inicio: v } }); })} type="time" />
                                 <InputField label="Pausa Fim" value={config.intervaloAlmoco.fim} onChange={v => setConfig(previous => { const c = previous || config; return ({ ...c, intervaloAlmoco: { ...c.intervaloAlmoco, fim: v } }); })} type="time" />
                             </div>

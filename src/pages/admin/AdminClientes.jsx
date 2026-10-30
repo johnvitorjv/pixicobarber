@@ -51,7 +51,7 @@ export default function AdminClientes() {
                 u.email?.toLowerCase().includes(q)
             );
         }
-        return all;
+        return [...all].sort((a, b) => Number(!!b.favorito) - Number(!!a.favorito));
     })();
 
     function abrirDetalhe(c) {
@@ -135,7 +135,7 @@ export default function AdminClientes() {
                         const clientApps = sbApps.filter(a => a.clienteId === c.id);
                         const concluidos = clientApps.filter(a => a.status === STATUS.CONCLUIDO || a.status === 'concluido').length;
                         return (
-                            <div key={c.id} className={`bg-black aspect-[3/4] flex flex-col justify-between p-6 border transition-all hover:-translate-y-1 group ${c.blacklist ? 'border-red-500/20 hover:border-red-500/40 backdrop-blur-md' : c.favorito ? 'border-primary/20 hover:border-primary/40' : 'border-white/5 hover:border-white/20'}`}>
+                            <div key={c.id} data-favorite={c.favorito ? 'true' : 'false'} className={`aspect-[3/4] flex flex-col justify-between p-6 border transition-all hover:-translate-y-1 group ${c.favorito ? 'bg-primary/[0.04] border-primary/60 hover:border-primary' : c.blacklist ? 'bg-black border-red-500/20 hover:border-red-500/40 backdrop-blur-md' : 'bg-black border-white/5 hover:border-white/20'}`}>
                                 <div>
                                     <div className="flex items-start justify-between mb-6">
                                         <button title="Ampliar foto" type="button" onClick={() => setPhotoPreview(c)} className="cursor-zoom-in"><Avatar src={c.fotoUrl} initials={`${c.nome?.[0] || ''}${c.sobrenome?.[0] || ''}`} size="md" className="ring-1 ring-white/10 group-hover:ring-primary/30 grayscale group-hover:grayscale-0 transition-all duration-500" /></button>
@@ -149,6 +149,7 @@ export default function AdminClientes() {
                                         </div>
                                     </div>
                                     <div className="mb-6">
+                                        {c.favorito && <span className="inline-flex items-center gap-1.5 text-[9px] font-bold tracking-widest uppercase text-primary border border-primary/40 bg-primary/10 px-2 py-1 mb-3"><Star size={11} className="fill-primary" /> Favorito · Prioridade</span>}
                                         <span className="font-display text-xl font-bold uppercase tracking-tight block mb-1 group-hover:text-primary transition-colors line-clamp-2">{c.apelido || c.nome} {c.sobrenome?.[0]}.</span>
                                         <span className="text-[10px] font-modern text-zinc-500 uppercase tracking-widest truncate block">{c.email}</span>
                                     </div>

@@ -33,7 +33,7 @@ const availabilityStore = {
     },
     async closeDay(dateStr, motivo) { return this.setDay(dateStr, { disponivel: false, motivo: motivo || 'Fechado', intervalos: [], bloqueios: [] }); },
     async openDay(dateStr) {
-        return this.setDay(dateStr, defaultOpenDay(this.getConfig()));
+        return this.setDay(dateStr, defaultOpenDay(this.getConfig(), dateStr));
     },
     async resetDay(dateStr) {
         await overrides.write(requireSupabase().from('day_overrides').delete().eq('data', dateStr));

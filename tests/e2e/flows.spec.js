@@ -8,7 +8,7 @@ test.beforeEach(async ({page}) => {
     await page.route('**/*', route => ['127.0.0.1','localhost'].includes(new URL(route.request().url()).hostname) ? route.continue() : route.abort());
 });
 
-async function mockBackend(page, { admin = false, developer = false, favorite = false, failBooking = false, failService = false, failLogout = false, flagged = false, chemical = false, failOverride = false, failConfirmation = false } = {}) {
+async function mockBackend(page, { admin = false, developer = false, favorite = false, failBooking = false, failService = false, failLogout = false, flagged = false, chemical = false, failOverride = false, failConfirmation = false, priorityList = false } = {}) {
     const state = { mutations: [], apps: [], signedOut: false, failLogout, failConfirmation, config: {nomeNegocio:'PIXICO Barber',whatsappNumero:'5571994096863',endereco:'Salvador',blacklistBehavior:'approval'} };
     const payload = Buffer.from(JSON.stringify({sub:id,exp:Math.floor(Date.now()/1000)+3600,role:'authenticated'})).toString('base64url');
     state.accessToken = 'eyJhbGciOiJIUzI1NiJ9.'+payload+'.test-signature';
@@ -41,7 +41,10 @@ async function mockBackend(page, { admin = false, developer = false, favorite = 
         else if (path.endsWith('/logout')) { state.signOutScope = url.searchParams.get('scope'); if (state.failLogout) { status=500; response={message:'temporary outage'}; } else { state.signedOut = true; status = 204; } }
         else if (path.endsWith('/recover')) response = {};
         else if (path.endsWith('/profiles')) response = method === 'GET' ? profile : { id };
-        else if (path.endsWith('/get_admin_clients')) response = [{ ...profile, role:'client', favorito:flagged, tags:[], blacklist:flagged }];
+        else if (path.endsWith('/get_admin_clients')) response = priorityList ? [
+            { ...profile, id:'66666666-6666-4666-8666-666666666666', nome:'Comum', role:'client', favorito:false, tags:[], blacklist:false },
+            { ...profile, id:'77777777-7777-4777-8777-777777777777', nome:'VIP', role:'client', favorito:true, tags:[], blacklist:false }
+        ] : [{ ...profile, role:'client', favorito:flagged, tags:[], blacklist:flagged }];
         else if (path.endsWith('/services')) { if (method !== 'GET' && failService) { status=503; response={message:'upstream unavailable'}; } else response=[service]; }
         else if (path.endsWith('/schedule_config')) response = [{ id:true, data:{ diasFuncionamento:[0,1,2,3,4,5,6], horarioInicio:'09:00',horarioFim:'20:00',intervaloAlmoco:{inicio:'13:00',fim:'15:30'},duracaoSlot:15,bloqueiosEspeciais:[],ferias:[] } }];
         else if (path.endsWith('/business_settings')) { if (method === 'PATCH') state.config = req.postDataJSON().data; response = [{id:true,data:state.config}]; }
@@ -111,13 +114,13 @@ async function chooseBooking(page) {
     await page.getByRole('button',{name:'09:00 — 09:45',exact:true}).click();
 }
 
-test('regular client sees a seven-day booking horizon', async ({page}) => {
+test('regular client sees a fourteen-day booking horizon', async ({page}) => {
     await mockBackend(page);
     await login(page); await expect(page).toHaveURL(/\/painel$/);
     await page.goto('/agendar');
     await page.getByRole('button',{name:/Corte de teste/}).click();
     const start = new Date(bahiaDate() + 'T12:00:00');
-    const end = new Date(start); end.setDate(end.getDate() + 7);
+    const end = new Date(start); end.setDate(end.getDate() + 14);
     const visibleEnd = bahiaDate(end).split('-').reverse().join('/');
     await expect(page.getByText(`Agenda móvel: escolha um dia até ${visibleEnd}. Novos dias abrem automaticamente.`)).toBeVisible();
     const nextMonth = page.locator('button:has(svg.lucide-chevron-right)').last();
@@ -132,7 +135,7 @@ test('regular client sees a seven-day booking horizon', async ({page}) => {
     }
 });
 
-test('developer client can navigate past the seven-day horizon', async ({page}) => {
+test('developer client can navigate past the fourteen-day horizon', async ({page}) => {
     await mockBackend(page,{developer:true});
     await login(page); await expect(page).toHaveURL(/\/painel$/);
     await page.goto('/agendar');
@@ -615,4 +618,15 @@ test('favorite developer keeps unrestricted booking horizon', async ({page}) => 
     await page.goto('/agendar');
     await page.getByRole('button',{name:/Corte de teste/}).click();
     await expect(page.getByText('Acesso de desenvolvedor: escolha qualquer dia disponível.')).toBeVisible();
+});
+
+test('favorite client is first and visibly highlighted in admin list', async ({page}) => {
+    await mockBackend(page,{admin:true,priorityList:true});
+    await login(page);
+    await page.goto('/admin/clientes');
+    const cards = page.locator('[data-favorite]');
+    await expect(cards).toHaveCount(2);
+    await expect(cards.first()).toHaveAttribute('data-favorite', 'true');
+    await expect(cards.first()).toContainText('Favorito · Prioridade');
+    await expect(cards.last()).toHaveAttribute('data-favorite', 'false');
 });

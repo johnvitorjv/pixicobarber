@@ -7,7 +7,7 @@ export function addCalendarDays(iso, days) {
 }
 
 export function bookingWindow(user, today = bahiaDate()) {
-    const days = user?.isDeveloper ? 7 : user?.favorito ? 14 : 7;
+    const days = 14;
     return { start: today, end: addCalendarDays(today, days), days, unrestricted: !!user?.isDeveloper };
 }
 

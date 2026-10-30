@@ -95,7 +95,8 @@ export default function AdminAgendamentos() {
                 );
             });
         }
-        return all;
+        const favoriteIds = new Set(clients.filter(c => c.favorito).map(c => c.id));
+        return [...all].sort((a, b) => Number(favoriteIds.has(b.clienteId)) - Number(favoriteIds.has(a.clienteId)));
     })();
 
     // Dados persistidos exclusivamente pelo Supabase.
@@ -266,7 +267,7 @@ export default function AdminAgendamentos() {
                                 const cliente = getCliente(ag);
                                 const sc = STATUS_CONFIG[ag.status] || {};
                                 return (
-                                    <tr key={ag.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors group">
+                                    <tr key={ag.id} data-favorite={cliente?.favorito ? "true" : "false"} className={`border-b hover:bg-white/[0.02] transition-colors group ${cliente?.favorito ? "border-primary/30 bg-primary/[0.04]" : "border-white/5"}`}>
                                         <td className="py-4 px-6">
                                             <div className="flex flex-wrap items-center gap-4">
                                                 <button type="button" title="Ampliar foto do cliente" aria-label={`Ampliar foto de ${cliente?.nome || 'cliente'}`} disabled={!cliente?.fotoUrl} onClick={() => setPhotoClient({ nome: `${cliente?.nome || 'Cliente'} ${cliente?.sobrenome || ''}`, foto: cliente.fotoUrl })} className="rounded-full focus:outline-2 focus:outline-primary disabled:cursor-default cursor-zoom-in" >

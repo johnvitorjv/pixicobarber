@@ -68,3 +68,22 @@ test('child haircut allowed on Tuesday Wednesday Thursday only, including overri
     const service={diasPermitidos:[2,3,4]};
     for (let d=4;d<=10;d++) assert.equal(serviceAllowedOnDate(service,`2026-10-${String(d).padStart(2,'0')}`),d>=6&&d<=8);
 });
+
+test('Friday/Saturday close at 21:00, other days stay at 20:00 and overrides win', () => {
+    const weekly = { ...config, horarioFimPorDia: { 5: '21:00', 6: '21:00' } };
+    validateSchedule(weekly);
+    for (const date of ['2026-10-30', '2026-10-31', '2026-11-06', '2026-11-07']) {
+        const day = generateDay(date, weekly);
+        assert.equal(day.faixas.at(-1).inicio, '20:45');
+        assert.equal(day.intervalos.at(-1).fim, '21:00');
+        assert.equal(fitsDay(day, 20 * 60 + 30, 21 * 60), true);
+        assert.equal(fitsDay(day, 20 * 60 + 30, 21 * 60 + 15), false);
+    }
+    for (const date of ['2026-11-03', '2026-11-04', '2026-11-05']) {
+        assert.equal(generateDay(date, weekly).faixas.at(-1).inicio, '19:45');
+    }
+    assert.equal(generateDay('2026-11-01', weekly).disponivel, false);
+    const special = { disponivel:true, intervalos:[{inicio:'09:00', fim:'18:00'}], bloqueios:[] };
+    assert.equal(generateDay('2026-10-30', weekly, special).faixas.at(-1).inicio, '17:45');
+    assert.throws(() => validateSchedule({ ...weekly, horarioFimPorDia: {5:'14:00'} }), /Fechamentos/);
+});

@@ -16,6 +16,10 @@ export function validateSchedule(c) {
     const lunchStart = timeMinutes(c.intervaloAlmoco?.inicio), lunchEnd = timeMinutes(c.intervaloAlmoco?.fim);
     if (![start, end, lunchStart, lunchEnd].every(Number.isFinite) || start >= end || lunchStart >= lunchEnd || lunchStart < start || lunchEnd > end) throw new Error('Verifique os horários de expediente e pausa.');
     if (c.duracaoSlot !== 15) throw new Error('Os inícios devem seguir a grade de 15 minutos.');
+    const closings = c.horarioFimPorDia || {};
+    if (typeof closings !== 'object' || Array.isArray(closings) || Object.entries(closings).some(([day, hour]) =>
+        !/^[0-6]$/.test(day) || typeof hour !== 'string' || !Number.isFinite(timeMinutes(hour)) ||
+        timeMinutes(hour) <= start || timeMinutes(hour) < lunchEnd)) throw new Error('Fechamentos por dia inválidos.');
     if ((c.ferias || []).some(f => !f.inicio || !f.fim || f.inicio > f.fim)) throw new Error('Verifique as datas de férias.');
     return c;
 }
@@ -30,13 +34,18 @@ export function generateDay(dateStr, config, override) {
     const block = (config.bloqueiosEspeciais || []).find(b => b.data === dateStr);
     if (block) return { disponivel: false, motivo: block.motivo || 'Fechado', faixas: [] };
     if (!config.diasFuncionamento.includes(new Date(dateStr + 'T12:00:00').getDay())) return { disponivel: false, motivo: 'Fechado', faixas: [] };
-    const day = defaultOpenDay(config);
+    const day = defaultOpenDay(config, dateStr);
     return { ...day, faixas: dayGrid(day) };
 }
-export function defaultOpenDay(config) {
+export function closingTimeForDate(config, dateStr) {
+    if (!dateStr) return config.horarioFim;
+    const weekday = new Date(`${dateStr}T12:00:00`).getDay();
+    return config.horarioFimPorDia?.[weekday] || config.horarioFim;
+}
+export function defaultOpenDay(config, dateStr) {
     return { disponivel: true, intervalos: [
         { inicio: config.horarioInicio, fim: config.intervaloAlmoco.inicio },
-        { inicio: config.intervaloAlmoco.fim, fim: config.horarioFim },
+        { inicio: config.intervaloAlmoco.fim, fim: closingTimeForDate(config, dateStr) },
     ].filter(f => f.inicio < f.fim), bloqueios: [] };
 }
 export function validateOverride(day) {

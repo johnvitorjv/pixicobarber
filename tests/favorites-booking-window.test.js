@@ -17,13 +17,13 @@ async function asUser(db,id,fn) {
   finally { await db.exec('reset role'); await db.query("select set_config('test.uid','',false)"); }
 }
 
-test('7-day standard, 14-day favorite, developer remains unrestricted in UI',()=>{
+test('all customers get 14 days; developer keeps unrestricted access',()=>{
   const now='2026-10-10';
   for(const [profile,days,unrestricted] of [
-    [{isDeveloper:false,favorito:false},7,false],
+    [{isDeveloper:false,favorito:false},14,false],
     [{isDeveloper:false,favorito:true},14,false],
-    [{isDeveloper:true,favorito:true},7,true],
-    [{isDeveloper:true,favorito:false},7,true],
+    [{isDeveloper:true,favorito:true},14,true],
+    [{isDeveloper:true,favorito:false},14,true],
   ]) {
     const w=bookingWindow(profile,now);
     assert.equal(w.days,days);
@@ -33,7 +33,7 @@ test('7-day standard, 14-day favorite, developer remains unrestricted in UI',()=
   assert.equal(profileToUser({id:FAVORITE,email:'test@example.invalid'},{id:FAVORITE,favorito:true}).favorito,true);
 });
 
-test('DB enforces favorite 14d, regular 7d, developer exception, safe rebooking',async()=>{
+test('DB enforces 14d for everyone, developer exception, safe rebooking and weekend hours',async()=>{
   const db=new PGlite({extensions:{btree_gist}});
   try{
     await db.exec([
@@ -56,6 +56,7 @@ test('DB enforces favorite 14d, regular 7d, developer exception, safe rebooking'
       '202610080005_suggestion_slots.sql',
       '202610090001_month_availability.sql',
       '202610100001_favorite_booking_window.sql',
+      '202610300001_weekend_hours_and_unified_window.sql',
     ]) await db.exec(await readFile(new URL('../supabase/migrations/'+file,import.meta.url),'utf8'));
     await db.query("insert into auth.users(id,email,raw_user_meta_data) values($1,'regular@example.invalid','{}'),($2,'favorite@example.invalid','{}'),($3,'developer@example.invalid','{}')",[REGULAR,FAVORITE,DEVELOPER]);
     await db.query('update public.profiles set favorito=true where id=$1',[FAVORITE]);
@@ -65,8 +66,10 @@ test('DB enforces favorite 14d, regular 7d, developer exception, safe rebooking'
     const {rows:[dates]}=await db.query("select (timezone('America/Bahia',now())::date+5)::text day5,(timezone('America/Bahia',now())::date+7)::text day7,(timezone('America/Bahia',now())::date+8)::text day8,(timezone('America/Bahia',now())::date+14)::text day14,(timezone('America/Bahia',now())::date+15)::text day15,(timezone('America/Bahia',now())::date+30)::text day30");
     const reserve=(who,when,slot='09:00',end='09:45')=>asUser(db,who,()=>db.query("insert into public.appointments(cliente_id,servico_id,data,faixa_inicio,faixa_fim,status) values($1,$2,$3,$4,$5,'pendente') returning id",[who,SERVICE,when,slot,end]));
     assert.equal((await db.query("select has_column_privilege('authenticated','public.profiles','favorito','SELECT') ok")).rows[0].ok,true);
-    assert.equal((await reserve(REGULAR,dates.day7)).rows.length,1);
-    await assert.rejects(reserve(REGULAR,dates.day8),/7 dias/);
+    const regularOriginal=(await reserve(REGULAR,dates.day7)).rows[0].id;
+    assert.equal((await reserve(REGULAR,dates.day8,'16:00','16:45')).rows.length,1);
+    assert.equal((await reserve(REGULAR,dates.day14,'16:00','16:45')).rows.length,1);
+    await assert.rejects(reserve(REGULAR,dates.day15),/14 dias/);
     const original=(await reserve(FAVORITE,dates.day5)).rows[0].id;
     assert.equal((await reserve(FAVORITE,dates.day8)).rows.length,1);
     assert.equal((await reserve(FAVORITE,dates.day14)).rows.length,1);
@@ -84,6 +87,11 @@ test('DB enforces favorite 14d, regular 7d, developer exception, safe rebooking'
     assert.equal((await reserve(DEVELOPER,dates.day30)).rows.length,1);
     await assert.rejects(asUser(db,REGULAR,()=>db.query('update public.profiles set favorito=true where id=$1',[REGULAR])),/administrativos|protegidos/);
     await db.query('update public.profiles set favorito=false where id=$1',[FAVORITE]);
-    await assert.rejects(reserve(FAVORITE,dates.day8,'15:00','15:45'),/7 dias/);
+    assert.equal((await reserve(FAVORITE,dates.day8,'17:00','17:45')).rows.length,1);
+    const regularSlots=await asUser(db,REGULAR,()=>db.query('select * from public.get_edit_slots($1,$2,$3)',[regularOriginal,dates.day14,SERVICE]));
+    assert.ok(regularSlots.rows.some(s=>s.inicio==='11:00'));
+    const friday=await db.query("select private.schedule_allows('2026-10-30','20:15','21:00') ok, private.schedule_allows('2026-10-30','20:30','21:15') too_late, private.schedule_allows('2026-10-31','20:15','21:00') saturday, private.schedule_allows('2026-11-03','20:15','21:00') tuesday");
+    assert.deepEqual(friday.rows[0], {ok:true,too_late:false,saturday:true,tuesday:false});
+    await assert.rejects(db.exec("update public.schedule_config set data=jsonb_set(data,'{horarioFimPorDia,5}',to_jsonb('14:00'::text))"),/Fechamento/);
   }finally{await db.close();}
 });
